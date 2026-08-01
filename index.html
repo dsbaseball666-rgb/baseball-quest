@@ -328,6 +328,7 @@ function buildDefaultConfig(){
     formUrl:'',
     penaltyPoints:30,
     bossDodgeChance:0.2,
+    attackEnergyCost:1,
     bossRoster: DEFAULT_BOSS_ROSTER.slice(),
     skillRoster: [
       {id:'sk_basic', name:'扎實基本功', desc:'攻擊傷害隨等級提升', type:'passive', stages:[
@@ -366,6 +367,7 @@ async function getConfig(){
     if(!parsed.shopItems) parsed.shopItems = [];
     if(parsed.penaltyPoints==null) parsed.penaltyPoints = 30;
     if(parsed.bossDodgeChance==null) parsed.bossDodgeChance = 0.2;
+    if(parsed.attackEnergyCost==null) parsed.attackEnergyCost = 1;
     if(!parsed.bossRoster || !parsed.bossRoster.length) parsed.bossRoster = DEFAULT_BOSS_ROSTER.slice();
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
     (parsed.skillRoster||[]).forEach(s=>{
@@ -543,12 +545,16 @@ function resetBossRoster(){
   });
 }
 async function saveBossDodgeChance(){
-  const pct = Number(state.bossDodgeDraft);
+  const pct = Number(state.bossDodgeDraft!==null?state.bossDodgeDraft:Math.round((state.config.bossDodgeChance!=null?state.config.bossDodgeChance:0.2)*100));
   if(isNaN(pct) || pct<0 || pct>100){ showToast('請輸入 0-100 之間的數字'); return; }
+  const cost = Number(state.attackCostDraft!==null?state.attackCostDraft:(state.config.attackEnergyCost!=null?state.config.attackEnergyCost:1));
+  if(isNaN(cost) || cost<0){ showToast('攻擊消耗能量請輸入 0 以上的數字'); return; }
   state.config.bossDodgeChance = pct/100;
+  state.config.attackEnergyCost = cost;
   await saveConfig(state.config);
   state.bossDodgeDraft = null;
-  showToast('已更新 Boss 閃避機率為 '+pct+'%');
+  state.attackCostDraft = null;
+  showToast('已更新設定：Boss 閃避機率 '+pct+'%、每次攻擊消耗 '+cost+' 點能量');
   render();
 }
 async function applyBossTemplate(templateId){
@@ -733,6 +739,7 @@ let state = {
   addShopDraft: {name:'', cost:20, desc:'', advanceNotice:false},
   shopDateDraft: {},
   bossDodgeDraft: null,
+  attackCostDraft: null,
   addBossDraft: {name:'', emoji:'', quote:''},
   addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'},
   skillStageDraft: {}
@@ -958,7 +965,8 @@ function pickQuestion(){
 
 function openAttack(){
   const p = state.playerData;
-  if(p.energy<=0){ showToast('能量不足，先完成今日練習吧！'); return; }
+  const cost = state.config.attackEnergyCost!=null ? state.config.attackEnergyCost : 1;
+  if(p.energy<cost){ showToast('能量不足，先完成今日練習吧！（每次攻擊需要 '+cost+' 點能量）'); return; }
   const q = pickQuestion();
   if(!q){ showToast('教練還沒有新增題目喔'); return; }
   state.quiz = { q, selectedIdx:null, result:null };
@@ -984,7 +992,8 @@ async function answerQuiz(idx){
   state.quiz.damage = damage;
   render();
 
-  p.energy = Math.max(0, p.energy-1);
+  const attackCost = state.config.attackEnergyCost!=null ? state.config.attackEnergyCost : 1;
+  p.energy = Math.max(0, p.energy-attackCost);
   let bossDefeated = false;
   let usedBuffName = null;
   if(isCorrect){
@@ -1468,6 +1477,7 @@ function renderPlayerRole(){
 
   const p = state.playerData;
   const boss = state.teamBoss || {name:'烈焰黑龍', emoji:'🐉', quote:'「膽敢挑戰本座？」', hp:0, maxHp:1, bossNumber:1};
+  const attackCost = state.config.attackEnergyCost!=null ? state.config.attackEnergyCost : 1;
   const hpPct = Math.max(0, Math.round(boss.hp/boss.maxHp*100));
   const acc = (p.correct+p.wrong)>0 ? Math.round(p.correct/(p.correct+p.wrong)*100) : 0;
   const doneToday = doneNamesToday(p);
@@ -1634,10 +1644,10 @@ function renderPlayerRole(){
     <div class="small-note" style="font-style:italic;">${esc(boss.quote||'「膽敢挑戰本座？」')}</div>
     <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
     <div class="hp-text">全隊共同 HP ${boss.hp} / ${boss.maxHp} ・ 你的答對率 ${acc}%</div>
-    <div class="energy-row">可用能量 <b>${p.energy}</b> ⚡ ・ 每次攻擊消耗 1 點</div>
+    <div class="energy-row">可用能量 <b>${p.energy}</b> ⚡ ・ 每次攻擊消耗 ${attackCost} 點</div>
     ${p.activeBuff ? `<div class="small-note" style="margin-top:8px;color:var(--accent-light);">⚡ 技能「${esc(p.activeBuff.name)}」已啟動，下一次攻擊生效</div>` : ''}
     <div style="margin-top:16px;">
-      <button class="btn" ${p.energy<=0?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
+      <button class="btn" ${p.energy<attackCost?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
     </div>
     <div class="small-note" style="margin-top:10px;">這隻 Boss 是全隊共同的敵人，大家一起累積傷害，打倒後會出現血量更高的新 Boss！</div>
   </div>
@@ -2029,6 +2039,7 @@ function renderCoachRole(){
           <select onchange="applyBossTemplate(this.value)">${rosterOptions}</select>
         </div>
         <div style="max-width:120px;"><label>Boss 閃避機率(%)</label><input type="number" value="${state.bossDodgeDraft!==null?state.bossDodgeDraft:Math.round((state.config.bossDodgeChance!=null?state.config.bossDodgeChance:0.2)*100)}" oninput="state.bossDodgeDraft=this.value"></div>
+        <div style="max-width:130px;"><label>每次攻擊消耗能量</label><input type="number" value="${state.attackCostDraft!==null?state.attackCostDraft:(state.config.attackEnergyCost!=null?state.config.attackEnergyCost:1)}" oninput="state.attackCostDraft=this.value"></div>
         <div style="flex:0;"><button class="btn secondary small" onclick="saveBossDodgeChance()">儲存</button></div>
         <div style="flex:0;"><button class="btn secondary small" onclick="resetTeamBoss()">🔄 重置 Boss</button></div>
       </div>
