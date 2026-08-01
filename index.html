@@ -458,7 +458,7 @@ function defaultPlayer(name, realName, avatarId){
     name, realName: realName||'', avatarId: avatarId || (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id) || null,
     level:1, energy:0, points:0,
     correct:0, wrong:0, streak:0, lastDate:null,
-    log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null
+    log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false
   };
 }
 function normalizePlayer(p){
@@ -470,6 +470,7 @@ function normalizePlayer(p){
   if(p.activeBuff===undefined) p.activeBuff = null;
   if(!p.avatarId) p.avatarId = (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id) || null;
   if(p.level>50) p.level = 50;
+  if(p.tutorialSeen===undefined) p.tutorialSeen = false;
   return p;
 }
 function characterById(id){
@@ -776,6 +777,8 @@ let state = {
   newPlayerRealName: '',
   newPlayerAvatarId: null,
   showAvatarPicker: false,
+  showTutorial: false,
+  tutorialStep: 0,
   playerChips: [],
   addItemDraft: {name:'', xp:10, points:5, required:false, requireVideo:false, subOptionsText:''},
   editingItemId: null,
@@ -867,6 +870,10 @@ async function selectPlayer(name){
   state.currentPlayer = name;
   state.playerData = p;
   state.teamBoss = await getTeamBoss();
+  if(!p.tutorialSeen){
+    state.showTutorial = true;
+    state.tutorialStep = 0;
+  }
   render();
 }
 
@@ -894,6 +901,36 @@ async function changeAvatar(avatarId){
   showToast('已更換角色！');
   render();
   loadPlayerChips();
+}
+
+const TUTORIAL_STEPS = [
+  { emoji:'⚾', title:'歡迎來到訓練競技場！', body:'這裡不只是打卡系統，是你的棒球冒險之旅。完成真實訓練、累積能量與經驗值，跟全隊一起打倒強大的敵人！' },
+  { emoji:'📋', title:'第一步：訓練之路', body:'到「訓練之路」勾選你今天完成的練習項目，送出後會獲得 ⚡能量 和 💰點數。有些項目要先上傳照片／影片證明喔！' },
+  { emoji:'⚔️', title:'用能量挑戰敵人', body:'能量可以拿來「揮棒迎擊」全隊共同的敵人。答對挑戰會造成傷害，答錯就揮棒落空——但沒關係，多練習明天能量會更多！' },
+  { emoji:'🌟', title:'升級與技能', body:'答對挑戰會累積經驗值，等級最高可以到 50 級。等級到了會自動解鎖技能——被動技能自動生效，主動技能可以花點數啟動，讓下一次攻擊更強！' },
+  { emoji:'🏪', title:'商店與物品欄', body:'點數可以在「兌換商店」換獎勵，換到的東西會出現在「物品欄」。額外任務也能讓你賺到額外點數！' },
+  { emoji:'🚀', title:'準備好了嗎？', body:'選好角色、看懂玩法，接下來就靠你自己冒險囉！有不懂的地方，隨時可以點右上角「❓ 教學」重新看一次。' }
+];
+function nextTutorialStep(){
+  if(state.tutorialStep < TUTORIAL_STEPS.length-1){ state.tutorialStep++; render(); }
+  else closeTutorial();
+}
+function prevTutorialStep(){
+  if(state.tutorialStep>0){ state.tutorialStep--; render(); }
+}
+async function closeTutorial(){
+  state.showTutorial = false;
+  const p = state.playerData;
+  if(p && !p.tutorialSeen){
+    p.tutorialSeen = true;
+    await savePlayer(p);
+  }
+  render();
+}
+function openTutorial(){
+  state.tutorialStep = 0;
+  state.showTutorial = true;
+  render();
 }
 
 function backToPicker(){
@@ -1486,6 +1523,28 @@ function renderAvatarPickerModal(){
   </div>`;
 }
 
+function renderTutorialModal(){
+  const step = TUTORIAL_STEPS[state.tutorialStep];
+  const isLast = state.tutorialStep===TUTORIAL_STEPS.length-1;
+  const dots = TUTORIAL_STEPS.map((s,i)=>`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 3px;background:${i===state.tutorialStep?'var(--accent-light)':'var(--line)'};"></span>`).join('');
+  return `
+  <div class="modal-bg">
+    <div class="modal" style="max-width:420px;text-align:center;">
+      <div style="font-size:52px;margin-bottom:6px;">${step.emoji}</div>
+      <h3 style="margin-bottom:10px;">${esc(step.title)}</h3>
+      <p style="font-size:14px;line-height:1.7;color:var(--text-chalk);">${esc(step.body)}</p>
+      <div style="margin:16px 0;">${dots}</div>
+      <div style="display:flex;gap:10px;justify-content:space-between;">
+        <button class="btn secondary small" onclick="closeTutorial()">跳過</button>
+        <div style="display:flex;gap:8px;">
+          ${state.tutorialStep>0 ? '<button class="btn secondary small" onclick="prevTutorialStep()">上一步</button>' : ''}
+          <button class="btn gold small" onclick="nextTutorialStep()">${isLast?'開始冒險！':'下一步'}</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderPlayerLogModal(){
   const p = state.viewingPlayer;
   const rows = p.log.slice(0,15).map((l,i)=>{
@@ -1603,6 +1662,17 @@ function renderPlayerRole(){
   const myChar = characterById(p.avatarId);
   const doneToday = doneNamesToday(p);
   const allDoneToday = state.config.items.length>0 && state.config.items.every(it=>doneToday.has(it.name));
+
+  let questHint;
+  if(!allDoneToday){
+    questHint = { text:'先去完成今天的訓練吧！勾選練習項目可以獲得能量和點數。', target:'path-panel', cta:'前往訓練之路' };
+  } else if(p.energy>=attackCost){
+    questHint = { text:'你有能量可以攻擊敵人了！去挑戰全隊共同的 Boss 吧！', target:'battle-panel', cta:'前往戰鬥' };
+  } else if(p.points>0){
+    questHint = { text:'今天的訓練都完成了！要不要去商店看看有什麼可以兌換？', target:'shop-panel', cta:'前往商店' };
+  } else {
+    questHint = { text:'今天的任務都完成囉！明天再來累積更多能量與經驗值吧！', target:null, cta:null };
+  }
 
   let itemRows = state.config.items.map(it=>{
     const alreadyDone = doneToday.has(it.name);
@@ -1742,7 +1812,10 @@ function renderPlayerRole(){
   <div class="panel">
     <div class="flex-between">
       <h2 style="margin:0;"><span class="eyebrow">Player</span>${esc(p.name)} 的競技場</h2>
-      <button class="btn secondary small" onclick="backToPicker()">切換球員</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary small" onclick="openTutorial()">❓ 教學</button>
+        <button class="btn secondary small" onclick="backToPicker()">切換球員</button>
+      </div>
     </div>
     <div style="display:flex;gap:12px;align-items:center;margin-top:10px;">
       <img src="${myChar.image}" style="width:64px;height:64px;image-rendering:pixelated;border-radius:12px;border:2px solid var(--line);background:var(--bg-panel-2);">
@@ -1766,7 +1839,19 @@ function renderPlayerRole(){
       <div class="hp-bar-outer" style="height:10px;"><div class="hp-bar-inner" style="width:${expPct}%;background:linear-gradient(90deg,var(--accent-green),#5fd1c4);"></div></div>
     </div>
   </div>
+
+  <div class="panel" style="background:linear-gradient(135deg, rgba(255,209,102,0.14), rgba(228,87,46,0.08)); border-color:var(--accent-light);">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="font-size:26px;">🧭</div>
+      <div style="flex:1;min-width:180px;">
+        <div style="font-family:var(--font-display);font-size:15px;color:var(--accent-light);letter-spacing:0.5px;">現在該做什麼？</div>
+        <div style="font-size:13px;color:var(--text-chalk);margin-top:2px;">${esc(questHint.text)}</div>
+      </div>
+      ${questHint.target ? `<button class="btn gold small" onclick="document.getElementById('${questHint.target}').scrollIntoView({behavior:'smooth',block:'start'});">${esc(questHint.cta)} →</button>` : ''}
+    </div>
+  </div>
   ${state.showAvatarPicker ? renderAvatarPickerModal() : ''}
+  ${state.showTutorial ? renderTutorialModal() : ''}
 
   <div class="panel">
     <h2><span class="eyebrow">Inventory</span>🎒 我的物品欄</h2>
@@ -1774,7 +1859,7 @@ function renderPlayerRole(){
     <div class="small-note" style="margin-top:8px;">「標記已使用」是給教練參考的紀錄，實際兌換（例如拿手套、請假）還是要跟教練當面確認喔。</div>
   </div>
 
-  <div class="panel battle-card">
+  <div class="panel battle-card" id="battle-panel">
     ${monsterVisualHtml(boss)}
     <div class="monster-name">${esc(boss.name)}（Boss #${boss.bossNumber}）</div>
     <div class="small-note" style="font-style:italic;">${esc(boss.quote||'「膽敢挑戰本座？」')}</div>
@@ -1794,7 +1879,7 @@ function renderPlayerRole(){
     <div class="item-list">${skillRows}</div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="path-panel">
     <h2><span class="eyebrow">Path</span>訓練之路</h2>
     ${allDoneToday ? '<div class="small-note">✅ 今天所有項目都完成囉，明天再來累積能量！</div>' : `
       <div class="item-list">${itemRows}</div>
@@ -1821,7 +1906,7 @@ function renderPlayerRole(){
     ${bonusHistory ? `<h2 style="margin-top:16px;font-size:16px;">最近回報</h2>${bonusHistory}` : ''}
   </div>
 
-  <div class="panel">
+  <div class="panel" id="shop-panel">
     <h2><span class="eyebrow">Shop</span>兌換商店</h2>
     <div class="item-list">${shopRows}</div>
   </div>`;
