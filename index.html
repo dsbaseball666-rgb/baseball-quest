@@ -293,7 +293,8 @@ function buildDefaultConfig(){
         {label:'跳繩 50 下', xp:1, points:1},
         {label:'自訂內容', xp:1, points:1}
       ]},
-      {id:'pitching', name:'投球練習', xp:10, points:5, required:false, requireVideo:false, subOptions:[]}
+      {id:'pitching', name:'投球練習', xp:10, points:5, required:false, requireVideo:false, subOptions:[]},
+      {id:'training_log', name:'訓練日誌', xp:15, points:8, required:false, requireVideo:true, subOptions:[]}
     ],
     questions:[
       {id:'q1', q:'打擊時，重心應該放在？', options:['前腳','後腳','雙腳平均','腳尖'], correct:2, tag:null, subTag:null},
@@ -311,7 +312,23 @@ function buildDefaultConfig(){
       {id:'exam_q2', q:'在滿壘一出局的情況下，擊球員擊出內野平飛球被內野手直接接殺，此時壘上跑者最正確的反應是？', options:['繼續往前壘包全力衝刺','留在原地不動，等待總教練指示','立即回原壘包（回壘），防止被雙殺','跑向投手丘'], correct:2, tag:null, subTag:null},
       {id:'exam_q3', q:'打擊時，關於「下半身重心與旋轉」的敘述，下列何者正確？', options:['揮棒時重心要完全放在前腳，後腳不可以發力','力量來自於下半身（腳掌貼地發力、跨步與髖關節旋轉），帶動上半身揮棒','只要手腕力量夠大，下半身動不動不重要','揮棒結束後身體要往後倒才能打高飛球'], correct:1, tag:null, subTag:null},
       {id:'exam_q4', q:'跑壘時，如果看到外野手接到飛球後漏球（失誤），跑者的第一反應應該是？', options:['停在原地看球掉在哪裡','立即觀察教練手勢與球的位置，果斷決定是否推進','立即轉身跑回休息區','慢慢走過下一個壘包'], correct:1, tag:null, subTag:null},
-      {id:'exam_q5', q:'關於夜間或陽光下的飛球處理，下列哪種觀念最正確？', options:['用手套直接擋住眼睛看球','喊聲「我的！」之後，其他隊友就可以完全不管這顆球','喊聲要大聲且明確，沒喊聲的人要主動補位與提醒（如：「有了！有了！」）','只要球飛高，通通交給游擊手處理'], correct:2, tag:null, subTag:null}
+      {id:'exam_q5', q:'關於夜間或陽光下的飛球處理，下列哪種觀念最正確？', options:['用手套直接擋住眼睛看球','喊聲「我的！」之後，其他隊友就可以完全不管這顆球','喊聲要大聲且明確，沒喊聲的人要主動補位與提醒（如：「有了！有了！」）','只要球飛高，通通交給游擊手處理'], correct:2, tag:null, subTag:null},
+      {id:'score_q1', q:'棒球記錄表中，投手的守備位置代號是？', options:['1','3','6','9'], correct:0, tag:null, subTag:null},
+      {id:'score_q2', q:'捕手的守備位置代號是？', options:['1','2','7','9'], correct:1, tag:null, subTag:null},
+      {id:'score_q3', q:'游擊手的守備位置代號是？', options:['4','5','6','8'], correct:2, tag:null, subTag:null},
+      {id:'score_q4', q:'中外野手的守備位置代號是？', options:['7','8','9','3'], correct:1, tag:null, subTag:null},
+      {id:'score_q5', q:'右外野手的守備位置代號是？', options:['7','8','9','6'], correct:2, tag:null, subTag:null},
+      {id:'score_q6', q:'記錄表中，數字「1」在打擊結果欄代表？', options:['一壘安打','一出局','一次盜壘','一次保送'], correct:0, tag:null, subTag:null},
+      {id:'score_q7', q:'記錄符號「HR」代表？', options:['二壘安打','全壘打','場內全壘打','高飛犧牲打'], correct:1, tag:null, subTag:null},
+      {id:'score_q8', q:'記錄符號「BB」代表？', options:['三振出局','四壞球保送','犧牲觸擊','盜壘失敗'], correct:1, tag:null, subTag:null},
+      {id:'score_q9', q:'記錄符號「IBB」代表？', options:['故意四壞球保送','內野安打','妨礙打擊','內野高飛必死球'], correct:0, tag:null, subTag:null},
+      {id:'score_q10', q:'記錄符號「HP」代表？', options:['高飛犧牲打','觸身球','全壘打','保送'], correct:1, tag:null, subTag:null},
+      {id:'score_q11', q:'記錄符號「SB」代表？', options:['犧牲觸擊','盜壘成功','守備選擇','三振'], correct:1, tag:null, subTag:null},
+      {id:'score_q12', q:'記錄符號「FC」代表？', options:['野手選擇','全壘打','犧牲飛球','雙殺打'], correct:0, tag:null, subTag:null},
+      {id:'score_q13', q:'記錄符號「PB」代表？', options:['投手犯規','捕手阻擋不住（捕逸）','打者出局','代打'], correct:1, tag:null, subTag:null},
+      {id:'score_q14', q:'記錄「6-4-3」這種連續數字通常代表？', options:['全壘打路徑','雙殺打的傳球路線','打者的打擊順序','投手的用球數'], correct:1, tag:null, subTag:null},
+      {id:'score_q15', q:'記錄符號「PH」代表？', options:['代跑','代打','指定打擊','先發打者'], correct:1, tag:null, subTag:null},
+      {id:'score_q16', q:'記錄符號「DH」代表？', options:['代打','代跑','指定打擊','守備調度'], correct:2, tag:null, subTag:null}
     ],
     bonusTasks:[
       {id:'book', name:'熟讀一本課外書', points:15}
@@ -406,14 +423,24 @@ function resetToDefaultConfig(){
     render();
   });
 }
-async function importExamQuestions(){
-  const examDefaults = buildDefaultConfig().questions.filter(q=>q.id.startsWith('exam_'));
+async function importQuestionsByPrefix(prefix, label){
+  const defaults = buildDefaultConfig().questions.filter(q=>q.id.startsWith(prefix));
   const existingIds = new Set(state.config.questions.map(q=>q.id));
-  const newOnes = examDefaults.filter(q=>!existingIds.has(q.id));
+  const newOnes = defaults.filter(q=>!existingIds.has(q.id));
   if(newOnes.length===0){ showToast('這些題目已經在題庫裡了'); return; }
   state.config.questions = state.config.questions.concat(newOnes);
   await saveConfig(state.config);
-  showToast('已匯入 '+newOnes.length+' 題新題目，不會影響你原本的題目與項目設定');
+  showToast('已匯入 '+newOnes.length+' 題'+(label||'')+'新題目，不會影響你原本的題目與項目設定');
+  render();
+}
+async function importExamQuestions(){ return importQuestionsByPrefix('exam_', ''); }
+async function importScorekeepingQuestions(){ return importQuestionsByPrefix('score_', '記錄符號'); }
+async function importTrainingLogItem(){
+  if(state.config.items.some(i=>i.id==='training_log')){ showToast('「訓練日誌」項目已經存在了'); return; }
+  const item = buildDefaultConfig().items.find(i=>i.id==='training_log');
+  state.config.items.push(item);
+  await saveConfig(state.config);
+  showToast('已新增「訓練日誌」項目！');
   render();
 }
 async function saveConfig(cfg){
@@ -1885,6 +1912,11 @@ function renderCoachRole(){
       </td></tr>`;
     }).join('');
     body = `
+    ${state.config.items.some(i=>i.id==='training_log') ? '' : `
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <div class="small-note" style="margin-bottom:8px;">偵測到你還沒有「訓練日誌」項目（依你提供的訓練日誌表格建立，需上傳照片／影片證明）。按下面按鈕直接加入，不會動到你其他的項目。</div>
+      <button class="btn secondary" onclick="importTrainingLogItem()">📥 新增「訓練日誌」項目</button>
+    </div>`}
     <table><thead><tr><th>項目名稱</th><th>能量／點數</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=3 class="empty">尚無項目</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
       <h2 style="font-size:16px;">${state.editingItemId?'編輯項目':'新增項目'}</h2>
@@ -2087,6 +2119,10 @@ function renderCoachRole(){
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <div class="small-note" style="margin-bottom:8px;">教練提供的「棒球認知測驗」選擇題（5 題）可以直接匯入題庫，不會動到你原本的項目或其他題目。</div>
       <button class="btn secondary" onclick="importExamQuestions()">📥 匯入棒球認知測驗選擇題</button>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <div class="small-note" style="margin-bottom:8px;">依照你提供的「記錄符號表」整理出的 16 題選擇題（守備位置代號、記錄符號 BB/HR/SB/FC 等），可以直接匯入題庫，不會動到你原本的項目或其他題目。</div>
+      <button class="btn secondary" onclick="importScorekeepingQuestions()">📥 匯入棒球記錄符號選擇題（16題）</button>
     </div>
     <table><thead><tr><th>題目</th><th>正解</th><th>對應項目</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=4 class="empty">尚無題目</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
