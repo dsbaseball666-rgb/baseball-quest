@@ -330,12 +330,30 @@ function buildDefaultConfig(){
     bossDodgeChance:0.2,
     bossRoster: DEFAULT_BOSS_ROSTER.slice(),
     skillRoster: [
-      {id:'sk_basic', name:'扎實基本功', desc:'攻擊傷害永久 +5', type:'passive', unlockLevel:2, bonusDamage:5, dodgeReduction:0, bonusPoints:0},
-      {id:'sk_read', name:'冷靜判讀', desc:'Boss 對你閃避的機率降低 10%', type:'passive', unlockLevel:3, bonusDamage:0, dodgeReduction:0.1, bonusPoints:0},
-      {id:'sk_fullpower', name:'全力一擊', desc:'花 10 點數啟動，下一次攻擊傷害加倍', type:'active', unlockLevel:4, cost:10, activeEffect:'doubleDamage'},
-      {id:'sk_bonus', name:'額外獎金', desc:'每次答對額外 +3 點數', type:'passive', unlockLevel:5, bonusDamage:0, dodgeReduction:0, bonusPoints:3},
-      {id:'sk_sure', name:'必中祝福', desc:'花 15 點數啟動，下一次攻擊必定命中（Boss 無法閃避）', type:'active', unlockLevel:6, cost:15, activeEffect:'guaranteedHit'},
-      {id:'sk_veteran', name:'老將氣勢', desc:'攻擊傷害永久 +10（與扎實基本功疊加）', type:'passive', unlockLevel:8, bonusDamage:10, dodgeReduction:0, bonusPoints:0}
+      {id:'sk_basic', name:'扎實基本功', desc:'攻擊傷害隨等級提升', type:'passive', stages:[
+        {level:2, bonusDamage:5, dodgeReduction:0, bonusPoints:0},
+        {level:5, bonusDamage:10, dodgeReduction:0, bonusPoints:0},
+        {level:9, bonusDamage:18, dodgeReduction:0.05, bonusPoints:0}
+      ]},
+      {id:'sk_read', name:'冷靜判讀', desc:'Boss 對你閃避的機率隨等級降低', type:'passive', stages:[
+        {level:3, bonusDamage:0, dodgeReduction:0.1, bonusPoints:0},
+        {level:6, bonusDamage:0, dodgeReduction:0.18, bonusPoints:0},
+        {level:10, bonusDamage:0, dodgeReduction:0.25, bonusPoints:0}
+      ]},
+      {id:'sk_bonus', name:'額外獎金', desc:'每次答對的額外點數隨等級提升', type:'passive', stages:[
+        {level:4, bonusDamage:0, dodgeReduction:0, bonusPoints:2},
+        {level:7, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
+        {level:10, bonusDamage:0, dodgeReduction:0, bonusPoints:6}
+      ]},
+      {id:'sk_fullpower', name:'全力一擊', desc:'花點數啟動，下一次攻擊傷害倍增；等級越高越便宜、倍數越高', type:'active', stages:[
+        {level:4, cost:10, effect:'doubleDamage', multiplier:2},
+        {level:7, cost:8, effect:'doubleDamage', multiplier:2.5},
+        {level:10, cost:6, effect:'doubleDamage', multiplier:3}
+      ]},
+      {id:'sk_sure', name:'必中祝福', desc:'花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
+        {level:6, cost:15, effect:'guaranteedHit', multiplier:1},
+        {level:9, cost:10, effect:'guaranteedHit', multiplier:1}
+      ]}
     ]
   };
 }
@@ -350,6 +368,16 @@ async function getConfig(){
     if(parsed.bossDodgeChance==null) parsed.bossDodgeChance = 0.2;
     if(!parsed.bossRoster || !parsed.bossRoster.length) parsed.bossRoster = DEFAULT_BOSS_ROSTER.slice();
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
+    (parsed.skillRoster||[]).forEach(s=>{
+      if(!s.stages || !s.stages.length){
+        // 舊版單階技能格式，轉換成一個階段
+        if(s.type==='passive'){
+          s.stages = [{level:s.unlockLevel||1, bonusDamage:s.bonusDamage||0, dodgeReduction:s.dodgeReduction||0, bonusPoints:s.bonusPoints||0}];
+        } else {
+          s.stages = [{level:s.unlockLevel||1, cost:s.cost||1, effect:s.activeEffect||'doubleDamage', multiplier:2}];
+        }
+      }
+    });
     if(!parsed.formUrl) parsed.formUrl = '';
     if(parsed.coachPassword==null) parsed.coachPassword = '';
     (parsed.items||[]).forEach(it=>{
@@ -491,15 +519,26 @@ async function applyBossTemplate(templateId){
   render();
 }
 
-/* ---- 技能系統 ---- */
+/* ---- 技能系統（支援隨等級進化） ---- */
+function skillCurrentStage(skill, level){
+  const eligible = (skill.stages||[]).filter(st=>level>=st.level).sort((a,b)=>b.level-a.level);
+  return eligible[0] || null;
+}
+function skillNextStage(skill, level){
+  const upcoming = (skill.stages||[]).filter(st=>st.level>level).sort((a,b)=>a.level-b.level);
+  return upcoming[0] || null;
+}
 function unlockedSkills(p){
-  return (state.config.skillRoster||[]).filter(s=>p.level>=s.unlockLevel);
+  return (state.config.skillRoster||[]).filter(s=>!!skillCurrentStage(s, p.level));
 }
 function activePassiveBonuses(p){
   return unlockedSkills(p).filter(s=>s.type==='passive').reduce((acc,s)=>{
-    acc.bonusDamage += Number(s.bonusDamage)||0;
-    acc.dodgeReduction += Number(s.dodgeReduction)||0;
-    acc.bonusPoints += Number(s.bonusPoints)||0;
+    const stage = skillCurrentStage(s, p.level);
+    if(stage){
+      acc.bonusDamage += Number(stage.bonusDamage)||0;
+      acc.dodgeReduction += Number(stage.dodgeReduction)||0;
+      acc.bonusPoints += Number(stage.bonusPoints)||0;
+    }
     return acc;
   }, {bonusDamage:0, dodgeReduction:0, bonusPoints:0});
 }
@@ -507,10 +546,12 @@ async function activateSkill(skillId){
   const p = state.playerData;
   const skill = unlockedSkills(p).find(s=>s.id===skillId && s.type==='active');
   if(!skill) return;
+  const stage = skillCurrentStage(skill, p.level);
+  if(!stage) return;
   if(p.activeBuff){ showToast('已經有一個技能生效中，先攻擊一次用掉它吧'); return; }
-  if(p.points < skill.cost){ showToast('點數不足，還差 '+(skill.cost-p.points)+' 點'); return; }
-  p.points -= skill.cost;
-  p.activeBuff = { skillId: skill.id, effect: skill.activeEffect, name: skill.name };
+  if(p.points < stage.cost){ showToast('點數不足，還差 '+(stage.cost-p.points)+' 點'); return; }
+  p.points -= stage.cost;
+  p.activeBuff = { skillId: skill.id, effect: stage.effect, multiplier: Number(stage.multiplier)||2, name: skill.name };
   await savePlayer(p);
   showToast('已啟動「'+skill.name+'」，下一次攻擊生效！');
   render();
@@ -538,26 +579,50 @@ async function addSkill(){
   if(!d.name.trim()){ showToast('請輸入技能名稱'); return; }
   const id = 'sk_'+Date.now();
   const skill = {
-    id, name:d.name.trim(), desc:(d.desc||'').trim(),
-    type: d.type, unlockLevel: Number(d.unlockLevel)||1
+    id, name:d.name.trim(), desc:(d.desc||'').trim(), type: d.type,
+    stages: []
   };
   if(d.type==='passive'){
-    skill.bonusDamage = Number(d.bonusDamage)||0;
-    skill.dodgeReduction = (Number(d.dodgeReductionPct)||0)/100;
-    skill.bonusPoints = Number(d.bonusPoints)||0;
+    skill.stages.push({level:Number(d.unlockLevel)||1, bonusDamage:Number(d.bonusDamage)||0, dodgeReduction:(Number(d.dodgeReductionPct)||0)/100, bonusPoints:Number(d.bonusPoints)||0});
   } else {
-    skill.cost = Number(d.cost)||1;
-    skill.activeEffect = d.activeEffect;
+    skill.stages.push({level:Number(d.unlockLevel)||1, cost:Number(d.cost)||1, effect:d.activeEffect, multiplier:d.activeEffect==='doubleDamage'?2:1});
   }
   if(!state.config.skillRoster) state.config.skillRoster = [];
   state.config.skillRoster.push(skill);
   await saveConfig(state.config);
   state.addSkillDraft = {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'};
-  showToast('已新增技能');
+  showToast('已新增技能（第一階段）');
   render();
 }
 async function deleteSkill(id){
   state.config.skillRoster = (state.config.skillRoster||[]).filter(s=>s.id!==id);
+  await saveConfig(state.config);
+  render();
+}
+async function addSkillStage(skillId){
+  const skill = (state.config.skillRoster||[]).find(s=>s.id===skillId);
+  if(!skill) return;
+  const draft = state.skillStageDraft[skillId] || {};
+  const level = Number(draft.level)||1;
+  if(skill.stages.some(st=>st.level===level)){ showToast('這個等級已經有階段了，換一個等級吧'); return; }
+  let stage;
+  if(skill.type==='passive'){
+    stage = {level, bonusDamage:Number(draft.bonusDamage)||0, dodgeReduction:(Number(draft.dodgeReductionPct)||0)/100, bonusPoints:Number(draft.bonusPoints)||0};
+  } else {
+    stage = {level, cost:Number(draft.cost)||1, effect:draft.effect||'doubleDamage', multiplier:Number(draft.multiplier)||2};
+  }
+  skill.stages.push(stage);
+  skill.stages.sort((a,b)=>a.level-b.level);
+  await saveConfig(state.config);
+  state.skillStageDraft[skillId] = {};
+  showToast('已新增進化階段：Lv.'+level);
+  render();
+}
+async function removeSkillStage(skillId, level){
+  const skill = (state.config.skillRoster||[]).find(s=>s.id===skillId);
+  if(!skill) return;
+  if(skill.stages.length<=1){ showToast('至少要保留一個階段喔（不然這個技能就永遠沒有效果了）'); return; }
+  skill.stages = skill.stages.filter(st=>st.level!==level);
   await saveConfig(state.config);
   render();
 }
@@ -625,7 +690,8 @@ let state = {
   shopDateDraft: {},
   bossDodgeDraft: null,
   addBossDraft: {name:'', emoji:'', quote:''},
-  addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'}
+  addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'},
+  skillStageDraft: {}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -867,7 +933,7 @@ async function answerQuiz(idx){
   const dodgeChance = Math.max(0, baseDodgeChance - passive.dodgeReduction);
   const dodged = isCorrect && !guaranteedHit && (Math.random()<dodgeChance);
   let damage = 20 + passive.bonusDamage;
-  if(isCorrect && buff && buff.effect==='doubleDamage') damage *= 2;
+  if(isCorrect && buff && buff.effect==='doubleDamage') damage *= (Number(buff.multiplier)||2);
   state.quiz.selectedIdx = idx;
   state.quiz.result = isCorrect ? 'correct' : 'wrong';
   state.quiz.dodged = dodged;
@@ -1407,28 +1473,51 @@ function renderPlayerRole(){
     </div>`).join('') || '<div class="empty">教練尚未設定額外任務</div>';
   let bonusHistory = (p.bonusLog||[]).slice(0,5).map(b=>`<div class="small-note">${esc(b.date)} · ${esc(b.name)} · +${b.points}點</div>`).join('');
 
-  const allSkills = (state.config.skillRoster||[]).slice().sort((a,b)=>a.unlockLevel-b.unlockLevel);
+  const allSkills = (state.config.skillRoster||[]).slice().sort((a,b)=>{
+    const la = (a.stages&&a.stages[0]?a.stages[0].level:1), lb = (b.stages&&b.stages[0]?b.stages[0].level:1);
+    return la-lb;
+  });
+  function stageDesc(skill, stage){
+    if(!stage) return '';
+    if(skill.type==='passive'){
+      const parts = [];
+      if(stage.bonusDamage) parts.push('傷害+'+stage.bonusDamage);
+      if(stage.dodgeReduction) parts.push('Boss閃避-'+Math.round(stage.dodgeReduction*100)+'%');
+      if(stage.bonusPoints) parts.push('答對額外+'+stage.bonusPoints+'點數');
+      return parts.join('、');
+    }
+    return '花💰'+stage.cost+'，'+(stage.effect==='doubleDamage'?('傷害x'+(stage.multiplier||2)):'必定命中');
+  }
   let skillRows = allSkills.map(s=>{
-    const unlocked = p.level >= s.unlockLevel;
-    if(!unlocked){
+    const firstLevel = s.stages && s.stages[0] ? s.stages[0].level : 1;
+    const cur = skillCurrentStage(s, p.level);
+    const next = skillNextStage(s, p.level);
+    if(!cur){
       return `<div class="item-row" style="cursor:default;opacity:0.5;">
-        <span>🔒 ${esc(s.name)}</span>
-        <span class="xp-tag">Lv.${s.unlockLevel} 解鎖</span>
+        <span>🔒 ${esc(s.name)} <span class="small-note">${esc(s.desc||'')}</span></span>
+        <span class="xp-tag">Lv.${firstLevel} 解鎖</span>
       </div>`;
     }
+    const nextLine = next ? `<div class="small-note" style="color:var(--accent-light);">⬆ Lv.${next.level} 進化：${esc(stageDesc(s,next))}</div>` : '<div class="small-note">已達最高階段</div>';
     if(s.type==='passive'){
-      return `<div class="item-row" style="cursor:default;">
-        <span>${esc(s.name)} <span class="small-note">${esc(s.desc||'')}</span></span>
-        <span class="xp-tag" style="color:var(--accent-green);">✅ 已啟用</span>
+      return `<div>
+        <div class="item-row" style="cursor:default;">
+          <span>${esc(s.name)} <span class="small-note">目前：${esc(stageDesc(s,cur))}</span></span>
+          <span class="xp-tag" style="color:var(--accent-green);">✅ 已啟用</span>
+        </div>
+        <div style="margin:2px 0 8px 12px;">${nextLine}</div>
       </div>`;
     }
     const pending = p.activeBuff && p.activeBuff.skillId===s.id;
-    const canAfford = p.points>=s.cost;
-    return `<div class="item-row" style="cursor:default;">
-      <span>${esc(s.name)} <span class="small-note">${esc(s.desc||'')}</span></span>
-      ${pending
-        ? '<span class="xp-tag" style="color:var(--accent-light);">⚡ 已啟動，下次攻擊生效</span>'
-        : `<button class="btn ${canAfford?'gold':'secondary'} small" ${(canAfford && !p.activeBuff)?'':'disabled'} onclick="activateSkill('${s.id}')" style="margin-left:auto;">啟動（💰${s.cost}）</button>`}
+    const canAfford = p.points>=cur.cost;
+    return `<div>
+      <div class="item-row" style="cursor:default;">
+        <span>${esc(s.name)} <span class="small-note">目前：${esc(stageDesc(s,cur))}</span></span>
+        ${pending
+          ? '<span class="xp-tag" style="color:var(--accent-light);">⚡ 已啟動，下次攻擊生效</span>'
+          : `<button class="btn ${canAfford?'gold':'secondary'} small" ${(canAfford && !p.activeBuff)?'':'disabled'} onclick="activateSkill('${s.id}')" style="margin-left:auto;">啟動（💰${cur.cost}）</button>`}
+      </div>
+      <div style="margin:2px 0 8px 12px;">${nextLine}</div>
     </div>`;
   }).join('') || '<div class="empty">教練尚未設定技能</div>';
 
@@ -1702,26 +1791,60 @@ function renderCoachRole(){
       <div style="margin-top:12px;"><button class="btn gold" onclick="addBossTemplate()">新增 Boss</button></div>
     </div>`;
   } else if(state.coachTab==='skills'){
-    const roster = (state.config.skillRoster||[]).slice().sort((a,b)=>a.unlockLevel-b.unlockLevel);
+    const roster = (state.config.skillRoster||[]).slice().sort((a,b)=>{
+      const la=(a.stages&&a.stages[0]?a.stages[0].level:1), lb=(b.stages&&b.stages[0]?b.stages[0].level:1);
+      return la-lb;
+    });
+    function stageChipDesc(skill, st){
+      if(skill.type==='passive'){
+        const parts=[];
+        if(st.bonusDamage) parts.push('傷害+'+st.bonusDamage);
+        if(st.dodgeReduction) parts.push('閃避-'+Math.round(st.dodgeReduction*100)+'%');
+        if(st.bonusPoints) parts.push('點數+'+st.bonusPoints);
+        return parts.join('、')||'無效果';
+      }
+      return '💰'+st.cost+'／'+(st.effect==='doubleDamage'?('傷害x'+(st.multiplier||2)):'必中');
+    }
     let rows = roster.map(s=>{
-      const effectDesc = s.type==='passive'
-        ? `⚡傷害+${s.bonusDamage||0} ・ 閃避-${Math.round((s.dodgeReduction||0)*100)}% ・ 💰答對加給+${s.bonusPoints||0}`
-        : `花費 💰${s.cost} ・ 效果：${s.activeEffect==='doubleDamage'?'下次傷害加倍':'下次必定命中'}`;
-      return `<tr><td>${esc(s.name)}<div class="small-note">${esc(s.desc||'')}</div></td><td>${s.type==='passive'?'被動':'主動'}</td><td>Lv.${s.unlockLevel}</td><td class="small-note">${effectDesc}</td><td><button class="btn secondary small" onclick="deleteSkill('${s.id}')">刪除</button></td></tr>`;
+      const stages = (s.stages||[]).slice().sort((a,b)=>a.level-b.level);
+      const chips = stages.map(st=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-deep);border:1px solid var(--line);border-radius:12px;padding:3px 8px;margin:2px 4px 2px 0;font-size:11px;">Lv.${st.level} ${esc(stageChipDesc(s,st))}<span title="移除這個階段" style="cursor:pointer;color:var(--accent-red);" onclick="removeSkillStage('${s.id}',${st.level})">✕</span></span>`).join('');
+      const sd = state.skillStageDraft[s.id] || {};
+      const addStageFields = s.type==='passive' ? `
+        <input type="number" style="max-width:90px;" value="${sd.bonusDamage||0}" oninput="state.skillStageDraft['${s.id}']=Object.assign({},state.skillStageDraft['${s.id}'],{bonusDamage:this.value})" placeholder="傷害">
+        <input type="number" style="max-width:90px;" value="${sd.dodgeReductionPct||0}" oninput="state.skillStageDraft['${s.id}']=Object.assign({},state.skillStageDraft['${s.id}'],{dodgeReductionPct:this.value})" placeholder="閃避降低%">
+        <input type="number" style="max-width:90px;" value="${sd.bonusPoints||0}" oninput="state.skillStageDraft['${s.id}']=Object.assign({},state.skillStageDraft['${s.id}'],{bonusPoints:this.value})" placeholder="額外點數">
+      ` : `
+        <input type="number" style="max-width:80px;" value="${sd.cost||10}" oninput="state.skillStageDraft['${s.id}']=Object.assign({},state.skillStageDraft['${s.id}'],{cost:this.value})" placeholder="花費">
+        <select onchange="state.skillStageDraft['${s.id}']=Object.assign({},state.skillStageDraft['${s.id}'],{effect:this.value})" style="max-width:150px;">
+          <option value="doubleDamage">傷害倍增</option>
+          <option value="guaranteedHit">必定命中</option>
+        </select>
+        <input type="number" style="max-width:80px;" value="${sd.multiplier||2}" oninput="state.skillStageDraft['${s.id}']=Object.assign({},state.skillStageDraft['${s.id}'],{multiplier:this.value})" placeholder="倍率">
+      `;
+      return `<tr><td>
+        <div>${esc(s.name)}${s.type==='passive'?' <span class="small-note">被動</span>':' <span class="small-note">主動</span>'}</div>
+        <div class="small-note">${esc(s.desc||'')}</div>
+        <div style="margin-top:6px;">${chips}</div>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+          <input type="number" style="max-width:70px;" value="${sd.level||''}" oninput="state.skillStageDraft['${s.id}']=Object.assign({},state.skillStageDraft['${s.id}'],{level:this.value})" placeholder="等級">
+          ${addStageFields}
+          <button class="btn secondary small" onclick="addSkillStage('${s.id}')">＋新增進化階段</button>
+        </div>
+      </td><td><button class="btn secondary small" onclick="deleteSkill('${s.id}')">刪除整個技能</button></td></tr>`;
     }).join('');
     const d = state.addSkillDraft;
     body = `
-    <div class="small-note" style="margin-bottom:10px;">技能會依球員等級自動解鎖（等級是依答對題數累積，每答對 5 題升 1 級）。被動技能解鎖後永久生效；主動技能學生要自己花點數啟動，啟動後下一次攻擊才會發動效果。</div>
-    <table><thead><tr><th>技能</th><th>類型</th><th>解鎖等級</th><th>效果</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=5 class="empty">尚無技能</td></tr>'}</tbody></table>
+    <div class="small-note" style="margin-bottom:10px;">每個技能可以設定多個「進化階段」——球員等級到了就自動變成該階段的效果（被動技能自動生效；主動技能是解鎖之後可以用該階段的花費啟動）。等級是依答對題數累積，每答對 5 題升 1 級。</div>
+    <table><thead><tr><th>技能與進化階段</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=2 class="empty">尚無技能</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
-      <h2 style="font-size:16px;">新增技能</h2>
+      <h2 style="font-size:16px;">新增技能（會建立第一個階段，之後可以在上面表格繼續加階段）</h2>
       <div class="row-flex">
         <div><label>技能名稱</label><input type="text" value="${esc(d.name)}" oninput="state.addSkillDraft.name=this.value" placeholder="例如：全力一擊"></div>
         <div style="max-width:110px;"><label>解鎖等級</label><input type="number" value="${d.unlockLevel}" oninput="state.addSkillDraft.unlockLevel=this.value"></div>
       </div>
       <div style="margin-top:10px;">
         <label>技能說明（選填，會顯示給學生看）</label>
-        <input type="text" value="${esc(d.desc)}" oninput="state.addSkillDraft.desc=this.value" placeholder="例如：攻擊傷害永久 +5">
+        <input type="text" value="${esc(d.desc)}" oninput="state.addSkillDraft.desc=this.value" placeholder="例如：攻擊傷害隨等級提升">
       </div>
       <div style="margin-top:10px;display:flex;gap:18px;">
         <label style="display:flex;align-items:center;gap:6px;color:var(--text-chalk);"><input type="radio" name="skillType" style="width:auto;" ${d.type==='passive'?'checked':''} onchange="state.addSkillDraft.type='passive';render();">被動（自動生效）</label>
