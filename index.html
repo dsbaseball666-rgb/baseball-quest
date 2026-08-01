@@ -372,7 +372,29 @@ function buildDefaultConfig(){
         {level:6, cost:15, effect:'guaranteedHit', multiplier:1},
         {level:9, cost:10, effect:'guaranteedHit', multiplier:1}
       ]}
-    ]
+    ],
+    classTiers: {
+      c_swordsman: [
+        {level:1, title:'見習劍士', desc:'剛入門的劍術新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0},
+        {level:15, title:'劍鬥士', desc:'揮劍更加熟練，攻擊傷害提升', bonusDamage:8, dodgeReduction:0, bonusPoints:0},
+        {level:30, title:'劍聖', desc:'劍術大成，傷害大幅提升並更難被閃避', bonusDamage:18, dodgeReduction:0.05, bonusPoints:0}
+      ],
+      c_mage: [
+        {level:1, title:'見習法師', desc:'剛學會魔法的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0},
+        {level:15, title:'秘法學徒', desc:'魔力增長，每次命中額外獲得點數', bonusDamage:0, dodgeReduction:0, bonusPoints:4},
+        {level:30, title:'大法師', desc:'魔法造詣爐火純青，傷害與點數都提升', bonusDamage:8, dodgeReduction:0, bonusPoints:8}
+      ],
+      c_archer: [
+        {level:1, title:'見習射手', desc:'剛開始練習射擊的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0},
+        {level:15, title:'神射手見習', desc:'眼力更加精準，敵人更難閃避你的攻擊', bonusDamage:0, dodgeReduction:0.08, bonusPoints:0},
+        {level:30, title:'傳說神射手', desc:'百發百中，傷害與精準度都達到巔峰', bonusDamage:10, dodgeReduction:0.15, bonusPoints:0}
+      ],
+      c_priest: [
+        {level:1, title:'見習牧師', desc:'剛開始學習祝禱的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0},
+        {level:15, title:'治療見習', desc:'祝禱更有效，每次命中額外獲得點數', bonusDamage:0, dodgeReduction:0, bonusPoints:4},
+        {level:30, title:'大祭司', desc:'祝禱大成，點數加成提升並帶來一絲敏捷', bonusDamage:0, dodgeReduction:0.06, bonusPoints:9}
+      ]
+    }
   };
 }
 async function getConfig(){
@@ -387,6 +409,7 @@ async function getConfig(){
     if(parsed.attackEnergyCost==null) parsed.attackEnergyCost = 1;
     if(!parsed.bossRoster || !parsed.bossRoster.length) parsed.bossRoster = DEFAULT_BOSS_ROSTER.slice();
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
+    if(!parsed.classTiers) parsed.classTiers = buildDefaultConfig().classTiers;
     (parsed.skillRoster||[]).forEach(s=>{
       if(!s.stages || !s.stages.length){
         // 舊版單階技能格式，轉換成一個階段
@@ -632,8 +655,20 @@ function skillNextStage(skill, level){
 function unlockedSkills(p){
   return (state.config.skillRoster||[]).filter(s=>!!skillCurrentStage(s, p.level));
 }
+/* ---- 職業轉職系統 ---- */
+function classTiersFor(characterId){
+  return (state.config.classTiers && state.config.classTiers[characterId]) || [];
+}
+function classTierCurrent(characterId, level){
+  const tiers = classTiersFor(characterId).slice().sort((a,b)=>b.level-a.level);
+  return tiers.find(t=>level>=t.level) || null;
+}
+function classTierNext(characterId, level){
+  const tiers = classTiersFor(characterId).slice().sort((a,b)=>a.level-b.level);
+  return tiers.find(t=>t.level>level) || null;
+}
 function activePassiveBonuses(p){
-  return unlockedSkills(p).filter(s=>s.type==='passive').reduce((acc,s)=>{
+  const fromSkills = unlockedSkills(p).filter(s=>s.type==='passive').reduce((acc,s)=>{
     const stage = skillCurrentStage(s, p.level);
     if(stage){
       acc.bonusDamage += Number(stage.bonusDamage)||0;
@@ -642,6 +677,13 @@ function activePassiveBonuses(p){
     }
     return acc;
   }, {bonusDamage:0, dodgeReduction:0, bonusPoints:0});
+  const classTier = classTierCurrent(p.avatarId, p.level);
+  if(classTier){
+    fromSkills.bonusDamage += Number(classTier.bonusDamage)||0;
+    fromSkills.dodgeReduction += Number(classTier.dodgeReduction)||0;
+    fromSkills.bonusPoints += Number(classTier.bonusPoints)||0;
+  }
+  return fromSkills;
 }
 async function activateSkill(skillId){
   const p = state.playerData;
@@ -727,6 +769,33 @@ async function removeSkillStage(skillId, level){
   await saveConfig(state.config);
   render();
 }
+async function addClassTier(characterId){
+  const d = state.classTierDraft[characterId] || {};
+  const level = Number(d.level);
+  const title = (d.title||'').trim();
+  if(!level || level<1){ showToast('請輸入有效的等級'); return; }
+  if(!title){ showToast('請輸入職業稱號'); return; }
+  if(!state.config.classTiers) state.config.classTiers = {};
+  if(!state.config.classTiers[characterId]) state.config.classTiers[characterId] = [];
+  if(state.config.classTiers[characterId].some(t=>t.level===level)){ showToast('這個等級已經有轉職階級了，換一個等級吧'); return; }
+  state.config.classTiers[characterId].push({
+    level, title, desc:(d.desc||'').trim(),
+    bonusDamage:Number(d.bonusDamage)||0,
+    dodgeReduction:(Number(d.dodgeReductionPct)||0)/100,
+    bonusPoints:Number(d.bonusPoints)||0
+  });
+  state.config.classTiers[characterId].sort((a,b)=>a.level-b.level);
+  await saveConfig(state.config);
+  state.classTierDraft[characterId] = {};
+  showToast('已新增轉職階級：Lv.'+level+' '+title);
+  render();
+}
+async function removeClassTier(characterId, level){
+  if(!state.config.classTiers || !state.config.classTiers[characterId]) return;
+  state.config.classTiers[characterId] = state.config.classTiers[characterId].filter(t=>t.level!==level);
+  await saveConfig(state.config);
+  render();
+}
 function todayStr(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -799,7 +868,8 @@ let state = {
   attackCostDraft: null,
   addBossDraft: {name:'', emoji:'', quote:''},
   addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'},
-  skillStageDraft: {}
+  skillStageDraft: {},
+  classTierDraft: {}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -1113,11 +1183,19 @@ async function answerQuiz(idx){
   let bossDefeated = false;
   let usedBuffName = null;
   let leveledUpTo = null;
+  let classPromotedTo = null;
   if(isCorrect){
     p.correct += 1;
     p.points += 5 + passive.bonusPoints;
+    const oldLevel = p.level;
     const newLevel = levelForCorrect(p.correct);
-    if(newLevel>p.level){ p.level = newLevel; leveledUpTo = newLevel; }
+    if(newLevel>p.level){
+      p.level = newLevel;
+      leveledUpTo = newLevel;
+      const newTier = classTierCurrent(p.avatarId, newLevel);
+      const oldTier = classTierCurrent(p.avatarId, oldLevel);
+      if(newTier && (!oldTier || oldTier.level!==newTier.level)) classPromotedTo = newTier.title;
+    }
     if(buff){ usedBuffName = buff.name; p.activeBuff = null; }
 
     if(!dodged){
@@ -1147,7 +1225,7 @@ async function answerQuiz(idx){
   setTimeout(()=>{
     state.quiz = null;
     render();
-    const levelUpText = leveledUpTo ? ('🌟 升到 Lv.'+leveledUpTo+(leveledUpTo>=MAX_LEVEL?'（已達最高等級！）':'')+'！') : '';
+    const levelUpText = leveledUpTo ? ('🌟 升到 Lv.'+leveledUpTo+(leveledUpTo>=MAX_LEVEL?'（已達最高等級！）':'')+'！'+(classPromotedTo?(' 🎖️ 轉職成為「'+classPromotedTo+'」！'):'')) : '';
     if(bossDefeated) showToast(levelUpText+'🎉 全隊擊破了敵人！新的「'+(state.teamBoss?state.teamBoss.name:'敵人')+'」已經出現，血量更高了！你獲得最後一擊獎勵 +80 點數！');
     else if(isCorrect && dodged) showToast(levelUpText+'💨 完美命中弱點！可惜被對方閃過了，沒有造成傷害（+5 點數）');
     else if(isCorrect) showToast(levelUpText+(usedBuffName?'✨「'+usedBuffName+'」發動！':'')+'看穿破綻！造成 '+damage+' 傷害，+5 點數');
@@ -1526,19 +1604,19 @@ function renderAvatarPickerModal(){
 function renderTutorialModal(){
   const step = TUTORIAL_STEPS[state.tutorialStep];
   const isLast = state.tutorialStep===TUTORIAL_STEPS.length-1;
-  const dots = TUTORIAL_STEPS.map((s,i)=>`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 3px;background:${i===state.tutorialStep?'var(--accent-light)':'var(--line)'};"></span>`).join('');
+  const dots = TUTORIAL_STEPS.map((s,i)=>`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px;background:${i===state.tutorialStep?'var(--accent-light)':'var(--line)'};"></span>`).join('');
   return `
   <div class="modal-bg">
-    <div class="modal" style="max-width:420px;text-align:center;">
-      <div style="font-size:52px;margin-bottom:6px;">${step.emoji}</div>
-      <h3 style="margin-bottom:10px;">${esc(step.title)}</h3>
-      <p style="font-size:14px;line-height:1.7;color:var(--text-chalk);">${esc(step.body)}</p>
-      <div style="margin:16px 0;">${dots}</div>
-      <div style="display:flex;gap:10px;justify-content:space-between;">
-        <button class="btn secondary small" onclick="closeTutorial()">跳過</button>
-        <div style="display:flex;gap:8px;">
-          ${state.tutorialStep>0 ? '<button class="btn secondary small" onclick="prevTutorialStep()">上一步</button>' : ''}
-          <button class="btn gold small" onclick="nextTutorialStep()">${isLast?'開始冒險！':'下一步'}</button>
+    <div class="modal" style="max-width:460px;width:92vw;text-align:center;padding:28px 22px;">
+      <div style="font-size:72px;margin-bottom:10px;">${step.emoji}</div>
+      <h3 style="margin-bottom:12px;font-size:24px;">${esc(step.title)}</h3>
+      <p style="font-size:17px;line-height:1.8;color:var(--text-chalk);">${esc(step.body)}</p>
+      <div style="margin:20px 0;">${dots}</div>
+      <div style="display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;">
+        <button class="btn secondary" style="font-size:16px;padding:14px 20px;" onclick="closeTutorial()">跳過</button>
+        <div style="display:flex;gap:10px;flex:1;justify-content:flex-end;">
+          ${state.tutorialStep>0 ? '<button class="btn secondary" style="font-size:16px;padding:14px 20px;" onclick="prevTutorialStep()">上一步</button>' : ''}
+          <button class="btn gold" style="font-size:16px;padding:14px 24px;" onclick="nextTutorialStep()">${isLast?'開始冒險！':'下一步'}</button>
         </div>
       </div>
     </div>
@@ -1660,6 +1738,9 @@ function renderPlayerRole(){
   const expIntoLevel = totalExp - (p.level-1)*EXP_PER_LEVEL;
   const expPct = p.level>=MAX_LEVEL ? 100 : Math.max(0, Math.min(100, Math.round(expIntoLevel/EXP_PER_LEVEL*100)));
   const myChar = characterById(p.avatarId);
+  const myTier = classTierCurrent(p.avatarId, p.level);
+  const myNextTier = classTierNext(p.avatarId, p.level);
+  const myTierTitle = myTier ? myTier.title : myChar.name;
   const doneToday = doneNamesToday(p);
   const allDoneToday = state.config.items.length>0 && state.config.items.every(it=>doneToday.has(it.name));
 
@@ -1813,14 +1894,16 @@ function renderPlayerRole(){
     <div class="flex-between">
       <h2 style="margin:0;"><span class="eyebrow">Player</span>${esc(p.name)} 的競技場</h2>
       <div style="display:flex;gap:8px;">
-        <button class="btn secondary small" onclick="openTutorial()">❓ 教學</button>
+        <button class="btn gold" style="font-size:14px;padding:10px 16px;" onclick="openTutorial()">❓ 教學</button>
         <button class="btn secondary small" onclick="backToPicker()">切換球員</button>
       </div>
     </div>
     <div style="display:flex;gap:12px;align-items:center;margin-top:10px;">
       <img src="${myChar.image}" style="width:64px;height:64px;image-rendering:pixelated;border-radius:12px;border:2px solid var(--line);background:var(--bg-panel-2);">
       <div>
-        <div style="font-family:var(--font-display);font-size:20px;color:var(--accent-light);">${esc(myChar.name)}</div>
+        <div style="font-family:var(--font-display);font-size:20px;color:var(--accent-light);">${esc(myTierTitle)}</div>
+        ${myTier && myTier.desc ? `<div class="small-note">${esc(myTier.desc)}</div>` : ''}
+        ${myNextTier ? `<div class="small-note" style="color:var(--accent-light);">⬆ Lv.${myNextTier.level} 轉職：${esc(myNextTier.title)}</div>` : ''}
         <button class="btn secondary small" onclick="state.showAvatarPicker=true;render();">更換角色</button>
       </div>
     </div>
@@ -2165,6 +2248,38 @@ function renderCoachRole(){
       </div>`}
       <div style="margin-top:12px;"><button class="btn gold" onclick="addSkill()">新增技能</button></div>
     </div>`;
+  } else if(state.coachTab==='classtiers'){
+    function tierChipDesc(t){
+      const parts = [];
+      if(t.bonusDamage) parts.push('傷害+'+t.bonusDamage);
+      if(t.dodgeReduction) parts.push('閃避-'+Math.round(t.dodgeReduction*100)+'%');
+      if(t.bonusPoints) parts.push('點數+'+t.bonusPoints);
+      return parts.join('、')||'無加成';
+    }
+    let sections = CHARACTER_ROSTER.map(c=>{
+      const tiers = (state.config.classTiers && state.config.classTiers[c.id] || []).slice().sort((a,b)=>a.level-b.level);
+      const chips = tiers.map(t=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-deep);border:1px solid var(--line);border-radius:12px;padding:3px 8px;margin:2px 4px 2px 0;font-size:11px;">Lv.${t.level} ${esc(t.title)}（${esc(tierChipDesc(t))}）<span title="移除這個階級" style="cursor:pointer;color:var(--accent-red);" onclick="removeClassTier('${c.id}',${t.level})">✕</span></span>`).join('');
+      const d = state.classTierDraft[c.id] || {};
+      return `<div class="panel" style="background:var(--bg-panel-2);margin-top:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="${c.image}" style="width:36px;height:36px;image-rendering:pixelated;border-radius:6px;">
+          <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);">${esc(c.name)}</div>
+        </div>
+        <div style="margin-top:8px;">${chips || '<span class="small-note">尚未設定轉職階級</span>'}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+          <input type="number" style="max-width:70px;" value="${d.level||''}" oninput="state.classTierDraft['${c.id}']=Object.assign({},state.classTierDraft['${c.id}'],{level:this.value})" placeholder="等級">
+          <input type="text" style="max-width:110px;" value="${esc(d.title||'')}" oninput="state.classTierDraft['${c.id}']=Object.assign({},state.classTierDraft['${c.id}'],{title:this.value})" placeholder="職業稱號">
+          <input type="text" style="max-width:150px;" value="${esc(d.desc||'')}" oninput="state.classTierDraft['${c.id}']=Object.assign({},state.classTierDraft['${c.id}'],{desc:this.value})" placeholder="說明（選填）">
+          <input type="number" style="max-width:80px;" value="${d.bonusDamage||0}" oninput="state.classTierDraft['${c.id}']=Object.assign({},state.classTierDraft['${c.id}'],{bonusDamage:this.value})" placeholder="傷害加成">
+          <input type="number" style="max-width:80px;" value="${d.dodgeReductionPct||0}" oninput="state.classTierDraft['${c.id}']=Object.assign({},state.classTierDraft['${c.id}'],{dodgeReductionPct:this.value})" placeholder="閃避降低%">
+          <input type="number" style="max-width:80px;" value="${d.bonusPoints||0}" oninput="state.classTierDraft['${c.id}']=Object.assign({},state.classTierDraft['${c.id}'],{bonusPoints:this.value})" placeholder="額外點數">
+          <button class="btn secondary small" onclick="addClassTier('${c.id}')">＋新增轉職階級</button>
+        </div>
+      </div>`;
+    }).join('');
+    body = `
+    <div class="small-note" style="margin-bottom:10px;">每個角色可以設定「轉職」階級——球員選了這個角色、等級到了，會自動變成該階級的稱號與被動加成（跟技能一樣是直接變成新階級，不會疊加同角色自己的舊階級）。目前已經幫「見習劍士／見習法師／見習射手／見習牧師」預設了 Lv.1→15→30 三階轉職，其他角色可以自己在這裡新增。</div>
+    ${sections}`;
   } else if(state.coachTab==='bonus'){
     let rows = (state.config.bonusTasks||[]).map(t=>`
       <tr><td>${esc(t.name)}</td><td>+${t.points}</td><td><button class="btn secondary small" onclick="deleteBonusTask('${t.id}')">刪除</button></td></tr>
@@ -2292,6 +2407,7 @@ function renderCoachRole(){
       <div class="tab ${state.coachTab==='shop'?'active':''}" onclick="setCoachTab('shop')">商店管理</div>
       <div class="tab ${state.coachTab==='bossroster'?'active':''}" onclick="setCoachTab('bossroster')">Boss 設定</div>
       <div class="tab ${state.coachTab==='skills'?'active':''}" onclick="setCoachTab('skills')">技能設定</div>
+      <div class="tab ${state.coachTab==='classtiers'?'active':''}" onclick="setCoachTab('classtiers')">職業設定</div>
       <div class="tab ${state.coachTab==='bonus'?'active':''}" onclick="setCoachTab('bonus')">額外任務</div>
       <div class="tab ${state.coachTab==='questions'?'active':''}" onclick="setCoachTab('questions')">題庫管理</div>
       <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
