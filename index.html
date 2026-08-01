@@ -346,6 +346,7 @@ function buildDefaultConfig(){
     penaltyPoints:30,
     bossDodgeChance:0.2,
     attackEnergyCost:1,
+    ultimateDamage:100,
     bossRoster: DEFAULT_BOSS_ROSTER.slice(),
     skillRoster: [
       {id:'sk_basic', name:'扎實基本功', desc:'攻擊傷害隨等級提升', type:'passive', stages:[
@@ -407,6 +408,7 @@ async function getConfig(){
     if(parsed.penaltyPoints==null) parsed.penaltyPoints = 30;
     if(parsed.bossDodgeChance==null) parsed.bossDodgeChance = 0.2;
     if(parsed.attackEnergyCost==null) parsed.attackEnergyCost = 1;
+    if(parsed.ultimateDamage==null) parsed.ultimateDamage = 100;
     if(!parsed.bossRoster || !parsed.bossRoster.length) parsed.bossRoster = DEFAULT_BOSS_ROSTER.slice();
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
     if(!parsed.classTiers) parsed.classTiers = buildDefaultConfig().classTiers;
@@ -479,7 +481,7 @@ async function listPlayers(){
 function defaultPlayer(name, realName, avatarId){
   return {
     name, realName: realName||'', avatarId: avatarId || (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id) || null,
-    level:1, energy:0, points:0,
+    level:1, energy:0, points:0, ultimateGauge:0,
     correct:0, wrong:0, streak:0, lastDate:null,
     log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false
   };
@@ -494,6 +496,7 @@ function normalizePlayer(p){
   if(!p.avatarId) p.avatarId = (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id) || null;
   if(p.level>50) p.level = 50;
   if(p.tutorialSeen===undefined) p.tutorialSeen = false;
+  if(p.ultimateGauge==null) p.ultimateGauge = 0;
   return p;
 }
 function characterById(id){
@@ -574,6 +577,35 @@ function applyTplFields(boss, tpl){
   boss.quote = tpl.quote;
 }
 function bossMaxHP(bossNumber){ return 500 + (bossNumber-1)*300; }
+
+const MONSTER_REACTIONS = {
+  hit: { action:'怒吼', lines:['「唔啊！這一下有感覺...」','「你這傢伙，還挺有兩下子！」','「可惡，血條掉了一截！」','「哼，還沒完呢！」','「痛！但這只是開始！」'] },
+  dodge: { action:'華麗閃避', lines:['「哈！慢了一步！」','「就這種程度想打中我？」','「閃開這種攻擊，小意思！」','「再試一次吧，凡人！」'] },
+  miss: { action:'嘲諷', lines:['「哈哈，這就是你的實力嗎？」','「破綻百出，重新來過吧！」','「連邊都碰不到！」','「這樣可打不倒我！」'] }
+};
+function pickMonsterReaction(kind){
+  const pool = MONSTER_REACTIONS[kind];
+  return { action: pool.action, line: pool.lines[Math.floor(Math.random()*pool.lines.length)] };
+}
+
+/* 對敵人造成傷害並處理擊敗/換下一隻的共用邏輯 */
+async function applyBossDamage(boss, damage, playerName){
+  boss.hp = Math.max(0, boss.hp-damage);
+  let defeated = false;
+  if(boss.hp<=0){
+    defeated = true;
+    const newBossNumber = boss.bossNumber+1;
+    const tpl = bossTemplateAt(newBossNumber-1);
+    boss.bossNumber = newBossNumber;
+    applyTplFields(boss, tpl);
+    boss.maxHp = bossMaxHP(newBossNumber);
+    boss.hp = boss.maxHp;
+    boss.kills = boss.kills || [];
+    boss.kills.unshift({date:todayStr(), by:playerName});
+    boss.kills = boss.kills.slice(0,10);
+  }
+  return defeated;
+}
 const EXP_PER_CORRECT = 10; // 每次命中（答對）獲得的經驗值
 const EXP_PER_LEVEL = 50;   // 每一等所需的經驗值
 const MAX_LEVEL = 50;       // 等級上限
@@ -624,12 +656,16 @@ async function saveBossDodgeChance(){
   if(isNaN(pct) || pct<0 || pct>100){ showToast('請輸入 0-100 之間的數字'); return; }
   const cost = Number(state.attackCostDraft!==null?state.attackCostDraft:(state.config.attackEnergyCost!=null?state.config.attackEnergyCost:1));
   if(isNaN(cost) || cost<0){ showToast('攻擊消耗能量請輸入 0 以上的數字'); return; }
+  const ultDmg = Number(state.ultimateDmgDraft!==null?state.ultimateDmgDraft:(state.config.ultimateDamage!=null?state.config.ultimateDamage:100));
+  if(isNaN(ultDmg) || ultDmg<0){ showToast('必殺技傷害值請輸入 0 以上的數字'); return; }
   state.config.bossDodgeChance = pct/100;
   state.config.attackEnergyCost = cost;
+  state.config.ultimateDamage = ultDmg;
   await saveConfig(state.config);
   state.bossDodgeDraft = null;
   state.attackCostDraft = null;
-  showToast('已更新設定：Boss 閃避機率 '+pct+'%、每次攻擊消耗 '+cost+' 點能量');
+  state.ultimateDmgDraft = null;
+  showToast('已更新設定：Boss 閃避機率 '+pct+'%、每次攻擊消耗 '+cost+' 點能量、必殺技傷害 '+ultDmg);
   render();
 }
 async function applyBossTemplate(templateId){
@@ -866,6 +902,7 @@ let state = {
   shopDateDraft: {},
   bossDodgeDraft: null,
   attackCostDraft: null,
+  ultimateDmgDraft: null,
   addBossDraft: {name:'', emoji:'', quote:''},
   addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'},
   skillStageDraft: {},
@@ -1176,6 +1213,7 @@ async function answerQuiz(idx){
   state.quiz.result = isCorrect ? 'correct' : 'wrong';
   state.quiz.dodged = dodged;
   state.quiz.damage = damage;
+  state.quiz.monsterReaction = pickMonsterReaction(!isCorrect ? 'miss' : (dodged ? 'dodge' : 'hit'));
   render();
 
   const attackCost = state.config.attackEnergyCost!=null ? state.config.attackEnergyCost : 1;
@@ -1187,6 +1225,7 @@ async function answerQuiz(idx){
   if(isCorrect){
     p.correct += 1;
     p.points += 5 + passive.bonusPoints;
+    p.ultimateGauge = Math.min(100, (p.ultimateGauge||0) + 20);
     const oldLevel = p.level;
     const newLevel = levelForCorrect(p.correct);
     if(newLevel>p.level){
@@ -1200,25 +1239,14 @@ async function answerQuiz(idx){
 
     if(!dodged){
       const boss = await getTeamBoss();
-      boss.hp = Math.max(0, boss.hp-damage);
-      if(boss.hp<=0){
-        bossDefeated = true;
-        p.points += 80;
-        const newBossNumber = boss.bossNumber+1;
-        const tpl = bossTemplateAt(newBossNumber-1);
-        boss.bossNumber = newBossNumber;
-        applyTplFields(boss, tpl);
-        boss.maxHp = bossMaxHP(newBossNumber);
-        boss.hp = boss.maxHp;
-        boss.kills = boss.kills || [];
-        boss.kills.unshift({date:todayStr(), by:p.name});
-        boss.kills = boss.kills.slice(0,10);
-      }
+      bossDefeated = await applyBossDamage(boss, damage, p.name);
+      if(bossDefeated) p.points += 80;
       await saveTeamBoss(boss);
       state.teamBoss = boss;
     }
   } else {
     p.wrong += 1;
+    p.ultimateGauge = Math.min(100, (p.ultimateGauge||0) + 5);
   }
   await savePlayer(p);
 
@@ -1231,6 +1259,25 @@ async function answerQuiz(idx){
     else if(isCorrect) showToast(levelUpText+(usedBuffName?'✨「'+usedBuffName+'」發動！':'')+'看穿破綻！造成 '+damage+' 傷害，+5 點數');
     else showToast('揮棒落空，沒有造成傷害');
   }, 1800);
+}
+
+async function useUltimate(){
+  const p = state.playerData;
+  if((p.ultimateGauge||0)<100){ showToast('必殺技量表還沒集滿喔！'); return; }
+  const dmg = state.config.ultimateDamage!=null ? state.config.ultimateDamage : 100;
+  const boss = await getTeamBoss();
+  const defeated = await applyBossDamage(boss, dmg, p.name);
+  if(defeated) p.points += 80;
+  await saveTeamBoss(boss);
+  state.teamBoss = boss;
+  p.ultimateGauge = 0;
+  p.points += 15;
+  await savePlayer(p);
+  showToast(defeated
+    ? ('💥💥💥 必殺技轟出 '+dmg+' 傷害，直接擊破敵人！新的「'+boss.name+'」已經出現！')
+    : ('💥💥💥 必殺技發動！對敵人造成 '+dmg+' 巨額傷害！+15 點數')
+  );
+  render();
 }
 
 /* ---- 教練操作 ---- */
@@ -1953,6 +2000,14 @@ function renderPlayerRole(){
     <div style="margin-top:16px;">
       <button class="btn" ${p.energy<attackCost?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
     </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);">
+      <div class="small-note" style="display:flex;justify-content:space-between;">
+        <span>💥 必殺技量表</span>
+        <span>${p.ultimateGauge||0} / 100</span>
+      </div>
+      <div class="hp-bar-outer" style="height:10px;"><div class="hp-bar-inner" style="width:${p.ultimateGauge||0}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);${(p.ultimateGauge||0)>=100?'animation:bossPulse 1.2s ease-in-out infinite;':''}"></div></div>
+      <button class="btn" style="margin-top:10px;width:100%;${(p.ultimateGauge||0)>=100?'background:linear-gradient(90deg,#ff6b6b,#ffd166);color:#3a1400;':''}" ${(p.ultimateGauge||0)<100?'disabled':''} onclick="useUltimate()">💥 發動必殺技${(p.ultimateGauge||0)>=100?'！':'（集滿才能用）'}</button>
+    </div>
     <div class="small-note" style="margin-top:10px;">這隻 Boss 是全隊共同的敵人，大家一起累積傷害，打倒後會出現血量更高的新 Boss！</div>
   </div>
 
@@ -1998,6 +2053,10 @@ function renderPlayerRole(){
 function renderQuizModal(){
   const q = state.quiz.q;
   const sel = state.quiz.selectedIdx;
+  const curBoss = state.teamBoss || {};
+  const bossMiniVisual = curBoss.image
+    ? `<img src="${curBoss.image}" style="width:46px;height:46px;image-rendering:pixelated;">`
+    : `${esc(curBoss.emoji||'🐉')}`;
   let opts = q.options.map((o,i)=>{
     let cls='opt-btn';
     if(sel!==null){
@@ -2008,6 +2067,7 @@ function renderQuizModal(){
   }).join('');
   let resultLine = '';
   let battleHtml = '';
+  let reactionHtml = '';
   if(sel!==null){
     const isCorrect = state.quiz.result==='correct';
     const dodged = !!state.quiz.dodged;
@@ -2031,8 +2091,14 @@ function renderQuizModal(){
       <div class="attacker">🏏</div>
       <div class="impact">${battleClass==='hit'?'💥':(battleClass==='dodge'?'💨':'💦')}</div>
       ${dmgText?`<div class="dmg-float">${dmgText}</div>`:''}
-      <div class="boss-target">🐉</div>
+      <div class="boss-target">${bossMiniVisual}</div>
     </div>`;
+    if(state.quiz.monsterReaction){
+      reactionHtml = `<div style="margin-top:8px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--text-dim);">
+        <span style="color:var(--accent-red);font-weight:600;">${esc(curBoss.name||'敵人')} ${esc(state.quiz.monsterReaction.action)}：</span>
+        ${esc(state.quiz.monsterReaction.line)}
+      </div>`;
+    }
   }
   return `
   <div class="modal-bg" onclick="if(event.target===this && ${sel===null}) closeQuiz()">
@@ -2045,6 +2111,7 @@ function renderQuizModal(){
       ${opts}
       ${battleHtml}
       ${resultLine}
+      ${reactionHtml}
     </div>
   </div>`;
 }
@@ -2387,6 +2454,7 @@ function renderCoachRole(){
         </div>
         <div style="max-width:120px;"><label>Boss 閃避機率(%)</label><input type="number" value="${state.bossDodgeDraft!==null?state.bossDodgeDraft:Math.round((state.config.bossDodgeChance!=null?state.config.bossDodgeChance:0.2)*100)}" oninput="state.bossDodgeDraft=this.value"></div>
         <div style="max-width:130px;"><label>每次攻擊消耗能量</label><input type="number" value="${state.attackCostDraft!==null?state.attackCostDraft:(state.config.attackEnergyCost!=null?state.config.attackEnergyCost:1)}" oninput="state.attackCostDraft=this.value"></div>
+        <div style="max-width:130px;"><label>必殺技傷害值</label><input type="number" value="${state.ultimateDmgDraft!==null?state.ultimateDmgDraft:(state.config.ultimateDamage!=null?state.config.ultimateDamage:100)}" oninput="state.ultimateDmgDraft=this.value"></div>
         <div style="flex:0;"><button class="btn secondary small" onclick="saveBossDodgeChance()">儲存</button></div>
         <div style="flex:0;"><button class="btn secondary small" onclick="resetTeamBoss()">🔄 重置 Boss</button></div>
       </div>
