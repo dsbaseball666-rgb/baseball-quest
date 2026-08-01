@@ -511,6 +511,7 @@ async function getPlayer(name){
 async function savePlayer(p){
   await dbSet('player:'+p.name, JSON.stringify(p));
 }
+const STARTER_CHARACTER_IDS = ['c_swordsman','c_archer','c_mage']; // 新球員建立/更換角色時只能選這幾個
 const CHARACTER_ROSTER = [
   {id:"c_swordsman", name:"見習劍士", image:"data:image/png;base64,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"},
   {id:"c_archer", name:"弓箭手", image:"data:image/png;base64,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"},
@@ -690,6 +691,27 @@ function skillNextStage(skill, level){
 }
 function unlockedSkills(p){
   return (state.config.skillRoster||[]).filter(s=>!!skillCurrentStage(s, p.level));
+}
+function skillIconFor(s){
+  if(s.type==='passive'){
+    const st = (s.stages && s.stages[0]) || {};
+    if(st.bonusDamage) return '⚔️';
+    if(st.dodgeReduction) return '🛡️';
+    if(st.bonusPoints) return '💰';
+    return '✨';
+  }
+  return (s.stages && s.stages[0] && s.stages[0].effect==='guaranteedHit') ? '🎯' : '💥';
+}
+function skillStageDesc(skill, stage){
+  if(!stage) return '';
+  if(skill.type==='passive'){
+    const parts = [];
+    if(stage.bonusDamage) parts.push('傷害+'+stage.bonusDamage);
+    if(stage.dodgeReduction) parts.push('Boss閃避-'+Math.round(stage.dodgeReduction*100)+'%');
+    if(stage.bonusPoints) parts.push('答對額外+'+stage.bonusPoints+'點數');
+    return parts.join('、')||'無效果';
+  }
+  return '花💰'+stage.cost+'，'+(stage.effect==='doubleDamage'?('傷害x'+(stage.multiplier||2)):'必定命中');
 }
 /* ---- 職業轉職系統 ---- */
 function classTiersFor(characterId){
@@ -883,6 +905,8 @@ let state = {
   newPlayerAvatarId: null,
   showAvatarPicker: false,
   showTutorial: false,
+  showBattleModal: false,
+  showSkillDetail: null,
   tutorialStep: 0,
   playerChips: [],
   addItemDraft: {name:'', xp:10, points:5, required:false, requireVideo:false, subOptionsText:''},
@@ -1543,10 +1567,11 @@ async function refreshOverview(){
 /* ============ 畫面渲染 ============ */
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function monsterVisualHtml(boss, sizeClass){
+  const px = sizeClass==='boss-emoji-small' ? 56 : 110;
   if(boss && boss.image){
-    return `<img src="${boss.image}" class="${sizeClass||'boss-emoji'}" style="width:110px;height:110px;image-rendering:pixelated;filter:drop-shadow(0 0 20px rgba(228,87,46,0.6));" alt="${esc(boss.name||'')}">`;
+    return `<img src="${boss.image}" class="${sizeClass||'boss-emoji'}" style="width:${px}px;height:${px}px;image-rendering:pixelated;filter:drop-shadow(0 0 ${sizeClass==='boss-emoji-small'?10:20}px rgba(228,87,46,0.6));" alt="${esc(boss.name||'')}">`;
   }
-  return `<div class="monster-emoji ${sizeClass||'boss-emoji'}">${esc((boss&&boss.emoji)||'🐉')}</div>`;
+  return `<div class="monster-emoji ${sizeClass||'boss-emoji'}" style="${sizeClass==='boss-emoji-small'?'font-size:44px;':''}">${esc((boss&&boss.emoji)||'🐉')}</div>`;
 }
 
 function render(){
@@ -1629,7 +1654,7 @@ function renderCoachLoginModal(){
 
 function renderAvatarPickerModal(){
   const p = state.playerData;
-  const grid = CHARACTER_ROSTER.map(c=>{
+  const grid = CHARACTER_ROSTER.filter(c=>STARTER_CHARACTER_IDS.includes(c.id)).map(c=>{
     const selected = p.avatarId===c.id;
     return `<div onclick="changeAvatar('${c.id}')" style="cursor:pointer;text-align:center;padding:6px;border-radius:10px;border:2px solid ${selected?'var(--accent-light)':'transparent'};background:${selected?'rgba(255,209,102,0.12)':'transparent'};">
       <img src="${c.image}" style="width:56px;height:56px;image-rendering:pixelated;">
@@ -1640,10 +1665,98 @@ function renderAvatarPickerModal(){
   <div class="modal-bg" onclick="if(event.target===this){state.showAvatarPicker=false;render();}">
     <div class="modal" style="max-width:420px;">
       <h3>更換角色</h3>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px;">${grid}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;">${grid}</div>
       <div style="margin-top:14px;text-align:right;">
         <button class="btn secondary small" onclick="state.showAvatarPicker=false;render();">關閉</button>
       </div>
+    </div>
+  </div>`;
+}
+
+function renderBattleModal(){
+  const p = state.playerData;
+  const boss = state.teamBoss || {name:'烈焰黑龍', emoji:'🐉', quote:'「膽敢挑戰本座？」', hp:0, maxHp:1, bossNumber:1};
+  const attackCost = state.config.attackEnergyCost!=null ? state.config.attackEnergyCost : 1;
+  const hpPct = Math.max(0, Math.round(boss.hp/boss.maxHp*100));
+  const acc = (p.correct+p.wrong)>0 ? Math.round(p.correct/(p.correct+p.wrong)*100) : 0;
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){state.showBattleModal=false;render();}">
+    <div class="modal battle-card" style="max-width:440px;">
+      <div style="text-align:right;margin-bottom:-6px;">
+        <button class="btn secondary small" onclick="state.showBattleModal=false;render();">✕ 關閉</button>
+      </div>
+      ${monsterVisualHtml(boss)}
+      <div class="monster-name">${esc(boss.name)}（Boss #${boss.bossNumber}）</div>
+      <div class="small-note" style="font-style:italic;">${esc(boss.quote||'「膽敢挑戰本座？」')}</div>
+      <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
+      <div class="hp-text">全隊共同 HP ${boss.hp} / ${boss.maxHp} ・ 你的答對率 ${acc}%</div>
+      <div class="energy-row">可用能量 <b>${p.energy}</b> ⚡ ・ 每次攻擊消耗 ${attackCost} 點</div>
+      ${p.activeBuff ? `<div class="small-note" style="margin-top:8px;color:var(--accent-light);">⚡ 技能「${esc(p.activeBuff.name)}」已啟動，下一次攻擊生效</div>` : ''}
+      <div style="margin-top:16px;">
+        <button class="btn" ${p.energy<attackCost?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
+      </div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);">
+        <div class="small-note" style="display:flex;justify-content:space-between;">
+          <span>💥 必殺技量表</span>
+          <span>${p.ultimateGauge||0} / 100</span>
+        </div>
+        <div class="hp-bar-outer" style="height:10px;"><div class="hp-bar-inner" style="width:${p.ultimateGauge||0}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);${(p.ultimateGauge||0)>=100?'animation:bossPulse 1.2s ease-in-out infinite;':''}"></div></div>
+        <button class="btn" style="margin-top:10px;width:100%;${(p.ultimateGauge||0)>=100?'background:linear-gradient(90deg,#ff6b6b,#ffd166);color:#3a1400;':''}" ${(p.ultimateGauge||0)<100?'disabled':''} onclick="useUltimate()">💥 發動必殺技${(p.ultimateGauge||0)>=100?'！':'（集滿才能用）'}</button>
+      </div>
+      <div class="small-note" style="margin-top:10px;">這隻 Boss 是全隊共同的敵人，大家一起累積傷害，打倒後會出現血量更高的新 Boss！</div>
+    </div>
+  </div>`;
+}
+
+function renderSkillDetailModal(){
+  const p = state.playerData;
+  if(state.showSkillDetail==='classPassive'){
+    const myChar = characterById(p.avatarId);
+    const cur = classTierCurrent(p.avatarId, p.level);
+    const next = classTierNext(p.avatarId, p.level);
+    const title = cur ? cur.title : myChar.name;
+    const descParts = cur ? [
+      cur.bonusDamage?('傷害+'+cur.bonusDamage):'',
+      cur.dodgeReduction?('Boss閃避-'+Math.round(cur.dodgeReduction*100)+'%'):'',
+      cur.bonusPoints?('答對額外+'+cur.bonusPoints+'點數'):''
+    ].filter(Boolean) : [];
+    const desc = descParts.length ? descParts.join('、') : (cur?'無加成':'尚未設定被動');
+    return `
+    <div class="modal-bg" onclick="if(event.target===this){state.showSkillDetail=null;render();}">
+      <div class="modal" style="max-width:380px;text-align:center;">
+        <div style="font-size:48px;">🧬</div>
+        <h3>${esc(title)}（職業被動）</h3>
+        ${cur && cur.desc ? `<p class="small-note">${esc(cur.desc)}</p>` : ''}
+        <div style="margin-top:10px;font-size:14px;">目前效果：${esc(desc)}</div>
+        ${next ? `<div class="small-note" style="color:var(--accent-light);margin-top:8px;">⬆ Lv.${next.level} 轉職：${esc(next.title)}</div>` : '<div class="small-note" style="margin-top:8px;">已達最高階級</div>'}
+        <div style="margin-top:16px;"><button class="btn secondary" onclick="state.showSkillDetail=null;render();">關閉</button></div>
+      </div>
+    </div>`;
+  }
+  const s = (state.config.skillRoster||[]).find(x=>x.id===state.showSkillDetail);
+  if(!s){ return ''; }
+  const cur = skillCurrentStage(s, p.level);
+  const next = skillNextStage(s, p.level);
+  const firstLevel = s.stages && s.stages[0] ? s.stages[0].level : 1;
+  const locked = !cur;
+  const pending = p.activeBuff && p.activeBuff.skillId===s.id;
+  const canAfford = cur && p.points>=cur.cost;
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){state.showSkillDetail=null;render();}">
+    <div class="modal" style="max-width:380px;text-align:center;">
+      <div style="font-size:48px;">${skillIconFor(s)}</div>
+      <h3>${esc(s.name)}</h3>
+      ${s.desc ? `<p class="small-note">${esc(s.desc)}</p>` : ''}
+      ${locked
+        ? `<div style="margin-top:10px;color:var(--text-dim);">🔒 Lv.${firstLevel} 解鎖</div>`
+        : `<div style="margin-top:10px;font-size:14px;">目前效果：${esc(skillStageDesc(s,cur))}</div>
+           ${s.type==='active' ? (
+             pending
+               ? '<div class="small-note" style="color:var(--accent-light);margin-top:8px;">⚡ 已啟動，下次攻擊生效</div>'
+               : `<button class="btn ${canAfford?'gold':'secondary'}" style="margin-top:10px;" ${(canAfford && !p.activeBuff)?'':'disabled'} onclick="activateSkill('${s.id}')">啟動（💰${cur.cost}）</button>`
+           ) : '<div class="small-note" style="color:var(--accent-green);margin-top:6px;">✅ 已啟用</div>'}`}
+      ${next ? `<div class="small-note" style="color:var(--accent-light);margin-top:10px;">⬆ Lv.${next.level} 進化：${esc(skillStageDesc(s,next))}</div>` : (cur?'<div class="small-note" style="margin-top:10px;">已達最高階段</div>':'')}
+      <div style="margin-top:16px;"><button class="btn secondary" onclick="state.showSkillDetail=null;render();">關閉</button></div>
     </div>
   </div>`;
 }
@@ -1734,7 +1847,7 @@ function renderPlayerRole(){
         <div class="lv">查看進度 →</div>
       </div>`;
     }).join('');
-    let avatarPickerHtml = CHARACTER_ROSTER.map(c=>{
+    let avatarPickerHtml = CHARACTER_ROSTER.filter(c=>STARTER_CHARACTER_IDS.includes(c.id)).map(c=>{
       const selected = state.newPlayerAvatarId===c.id;
       return `<div onclick="state.newPlayerAvatarId='${c.id}';render();" style="cursor:pointer;text-align:center;padding:6px;border-radius:10px;border:2px solid ${selected?'var(--accent-light)':'transparent'};background:${selected?'rgba(255,209,102,0.12)':'transparent'};">
         <img src="${c.image}" style="width:56px;height:56px;image-rendering:pixelated;">
@@ -1768,7 +1881,7 @@ function renderPlayerRole(){
       </div>
       <div style="margin-top:14px;">
         <label>選擇你的角色</label>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px;">${avatarPickerHtml}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px;">${avatarPickerHtml}</div>
       </div>
       <div style="margin-top:14px;">
         <button class="btn gold" onclick="createPlayer()">建立並開始</button>
@@ -1793,13 +1906,13 @@ function renderPlayerRole(){
 
   let questHint;
   if(!allDoneToday){
-    questHint = { text:'先去完成今天的訓練吧！勾選練習項目可以獲得能量和點數。', target:'path-panel', cta:'前往訓練之路' };
+    questHint = { text:'先去完成今天的訓練吧！勾選練習項目可以獲得能量和點數。', action:"document.getElementById('path-panel').scrollIntoView({behavior:'smooth',block:'start'});", cta:'前往訓練之路' };
   } else if(p.energy>=attackCost){
-    questHint = { text:'你有能量可以攻擊敵人了！去挑戰全隊共同的 Boss 吧！', target:'battle-panel', cta:'前往戰鬥' };
+    questHint = { text:'你有能量可以攻擊敵人了！去挑戰全隊共同的 Boss 吧！', action:"state.showBattleModal=true;render();", cta:'進入戰鬥' };
   } else if(p.points>0){
-    questHint = { text:'今天的訓練都完成了！要不要去商店看看有什麼可以兌換？', target:'shop-panel', cta:'前往商店' };
+    questHint = { text:'今天的訓練都完成了！要不要去商店看看有什麼可以兌換？', action:"document.getElementById('shop-panel').scrollIntoView({behavior:'smooth',block:'start'});", cta:'前往商店' };
   } else {
-    questHint = { text:'今天的任務都完成囉！明天再來累積更多能量與經驗值吧！', target:null, cta:null };
+    questHint = { text:'今天的任務都完成囉！明天再來累積更多能量與經驗值吧！', action:null, cta:null };
   }
 
   let itemRows = state.config.items.map(it=>{
@@ -1864,49 +1977,25 @@ function renderPlayerRole(){
     const la = (a.stages&&a.stages[0]?a.stages[0].level:1), lb = (b.stages&&b.stages[0]?b.stages[0].level:1);
     return la-lb;
   });
-  function stageDesc(skill, stage){
-    if(!stage) return '';
-    if(skill.type==='passive'){
-      const parts = [];
-      if(stage.bonusDamage) parts.push('傷害+'+stage.bonusDamage);
-      if(stage.dodgeReduction) parts.push('Boss閃避-'+Math.round(stage.dodgeReduction*100)+'%');
-      if(stage.bonusPoints) parts.push('答對額外+'+stage.bonusPoints+'點數');
-      return parts.join('、');
-    }
-    return '花💰'+stage.cost+'，'+(stage.effect==='doubleDamage'?('傷害x'+(stage.multiplier||2)):'必定命中');
-  }
-  let skillRows = allSkills.map(s=>{
+  const classPassiveTile = `<div onclick="state.showSkillDetail='classPassive';render();" style="cursor:pointer;text-align:center;padding:10px 6px;border-radius:12px;border:2px solid var(--accent-green);background:rgba(42,157,143,0.12);position:relative;">
+    <div style="position:absolute;top:4px;right:6px;font-size:11px;">⭐</div>
+    <div style="font-size:28px;">🧬</div>
+    <div style="font-size:11px;margin-top:4px;color:var(--text-chalk);">${esc(myTierTitle)}</div>
+    <div class="small-note" style="font-size:10px;">職業被動</div>
+  </div>`;
+  let skillTiles = allSkills.map(s=>{
     const firstLevel = s.stages && s.stages[0] ? s.stages[0].level : 1;
     const cur = skillCurrentStage(s, p.level);
-    const next = skillNextStage(s, p.level);
-    if(!cur){
-      return `<div class="item-row" style="cursor:default;opacity:0.5;">
-        <span>🔒 ${esc(s.name)} <span class="small-note">${esc(s.desc||'')}</span></span>
-        <span class="xp-tag">Lv.${firstLevel} 解鎖</span>
-      </div>`;
-    }
-    const nextLine = next ? `<div class="small-note" style="color:var(--accent-light);">⬆ Lv.${next.level} 進化：${esc(stageDesc(s,next))}</div>` : '<div class="small-note">已達最高階段</div>';
-    if(s.type==='passive'){
-      return `<div>
-        <div class="item-row" style="cursor:default;">
-          <span>${esc(s.name)} <span class="small-note">目前：${esc(stageDesc(s,cur))}</span></span>
-          <span class="xp-tag" style="color:var(--accent-green);">✅ 已啟用</span>
-        </div>
-        <div style="margin:2px 0 8px 12px;">${nextLine}</div>
-      </div>`;
-    }
+    const locked = !cur;
+    const icon = skillIconFor(s);
     const pending = p.activeBuff && p.activeBuff.skillId===s.id;
-    const canAfford = p.points>=cur.cost;
-    return `<div>
-      <div class="item-row" style="cursor:default;">
-        <span>${esc(s.name)} <span class="small-note">目前：${esc(stageDesc(s,cur))}</span></span>
-        ${pending
-          ? '<span class="xp-tag" style="color:var(--accent-light);">⚡ 已啟動，下次攻擊生效</span>'
-          : `<button class="btn ${canAfford?'gold':'secondary'} small" ${(canAfford && !p.activeBuff)?'':'disabled'} onclick="activateSkill('${s.id}')" style="margin-left:auto;">啟動（💰${cur.cost}）</button>`}
-      </div>
-      <div style="margin:2px 0 8px 12px;">${nextLine}</div>
+    return `<div onclick="state.showSkillDetail='${s.id}';render();" style="cursor:pointer;text-align:center;padding:10px 6px;border-radius:12px;border:2px solid ${locked?'var(--line)':(pending?'var(--accent-light)':'var(--accent-green)')};background:${locked?'var(--bg-panel-2)':(pending?'rgba(255,209,102,0.15)':'rgba(42,157,143,0.08)')};opacity:${locked?0.55:1};position:relative;">
+      ${locked?`<div style="position:absolute;top:4px;right:6px;font-size:12px;">🔒</div>`:(pending?'<div style="position:absolute;top:4px;right:6px;font-size:12px;">⚡</div>':'')}
+      <div style="font-size:28px;">${icon}</div>
+      <div style="font-size:11px;margin-top:4px;color:${locked?'var(--text-dim)':'var(--text-chalk)'};">${esc(s.name)}</div>
+      ${locked?`<div class="small-note" style="font-size:10px;">Lv.${firstLevel} 解鎖</div>`:''}
     </div>`;
-  }).join('') || '<div class="empty">教練尚未設定技能</div>';
+  }).join('') || '';
 
   const shopItems = state.config.shopItems || [];
   const minDate = (()=>{ const d=new Date(); d.setDate(d.getDate()+1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
@@ -1977,7 +2066,7 @@ function renderPlayerRole(){
         <div style="font-family:var(--font-display);font-size:15px;color:var(--accent-light);letter-spacing:0.5px;">現在該做什麼？</div>
         <div style="font-size:13px;color:var(--text-chalk);margin-top:2px;">${esc(questHint.text)}</div>
       </div>
-      ${questHint.target ? `<button class="btn gold small" onclick="document.getElementById('${questHint.target}').scrollIntoView({behavior:'smooth',block:'start'});">${esc(questHint.cta)} →</button>` : ''}
+      ${questHint.action ? `<button class="btn gold small" onclick="${questHint.action}">${esc(questHint.cta)} →</button>` : ''}
     </div>
   </div>
   ${state.showAvatarPicker ? renderAvatarPickerModal() : ''}
@@ -1989,33 +2078,27 @@ function renderPlayerRole(){
     <div class="small-note" style="margin-top:8px;">「標記已使用」是給教練參考的紀錄，實際兌換（例如拿手套、請假）還是要跟教練當面確認喔。</div>
   </div>
 
-  <div class="panel battle-card" id="battle-panel">
-    ${monsterVisualHtml(boss)}
-    <div class="monster-name">${esc(boss.name)}（Boss #${boss.bossNumber}）</div>
-    <div class="small-note" style="font-style:italic;">${esc(boss.quote||'「膽敢挑戰本座？」')}</div>
-    <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
-    <div class="hp-text">全隊共同 HP ${boss.hp} / ${boss.maxHp} ・ 你的答對率 ${acc}%</div>
-    <div class="energy-row">可用能量 <b>${p.energy}</b> ⚡ ・ 每次攻擊消耗 ${attackCost} 點</div>
-    ${p.activeBuff ? `<div class="small-note" style="margin-top:8px;color:var(--accent-light);">⚡ 技能「${esc(p.activeBuff.name)}」已啟動，下一次攻擊生效</div>` : ''}
-    <div style="margin-top:16px;">
-      <button class="btn" ${p.energy<attackCost?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
-    </div>
-    <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);">
-      <div class="small-note" style="display:flex;justify-content:space-between;">
-        <span>💥 必殺技量表</span>
-        <span>${p.ultimateGauge||0} / 100</span>
+  <div class="panel battle-card" id="battle-panel" style="cursor:pointer;padding:16px;" onclick="state.showBattleModal=true;render();">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div style="position:relative;flex-shrink:0;">
+        ${monsterVisualHtml(boss, 'boss-emoji-small')}
+        ${(p.ultimateGauge||0)>=100 ? '<div style="position:absolute;top:-4px;right:-4px;font-size:16px;">💥</div>' : ''}
       </div>
-      <div class="hp-bar-outer" style="height:10px;"><div class="hp-bar-inner" style="width:${p.ultimateGauge||0}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);${(p.ultimateGauge||0)>=100?'animation:bossPulse 1.2s ease-in-out infinite;':''}"></div></div>
-      <button class="btn" style="margin-top:10px;width:100%;${(p.ultimateGauge||0)>=100?'background:linear-gradient(90deg,#ff6b6b,#ffd166);color:#3a1400;':''}" ${(p.ultimateGauge||0)<100?'disabled':''} onclick="useUltimate()">💥 發動必殺技${(p.ultimateGauge||0)>=100?'！':'（集滿才能用）'}</button>
+      <div style="flex:1;text-align:left;min-width:0;">
+        <div class="monster-name" style="font-size:16px;">${esc(boss.name)}</div>
+        <div class="hp-bar-outer" style="height:8px;margin:4px 0;"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
+        <div class="small-note">⚡${p.energy} 可攻擊 ${Math.floor(p.energy/(attackCost||1))} 次 ・ 點我進入戰鬥 →</div>
+      </div>
     </div>
-    <div class="small-note" style="margin-top:10px;">這隻 Boss 是全隊共同的敵人，大家一起累積傷害，打倒後會出現血量更高的新 Boss！</div>
   </div>
+  ${state.showBattleModal ? renderBattleModal() : ''}
 
   <div class="panel">
     <h2><span class="eyebrow">Skills</span>🧠 我的技能</h2>
-    <div class="small-note" style="margin-bottom:8px;">技能會隨等級自動解鎖。被動技能解鎖後永久生效；主動技能要花點數啟動，啟動後下一次攻擊才會發動。</div>
-    <div class="item-list">${skillRows}</div>
+    <div class="small-note" style="margin-bottom:10px;">職業被動永久生效；技能會隨等級自動解鎖，點格子看詳細內容。主動技能要花點數啟動，啟動後下一次攻擊才會發動。</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">${classPassiveTile}${skillTiles}</div>
   </div>
+  ${state.showSkillDetail ? renderSkillDetailModal() : ''}
 
   <div class="panel" id="path-panel">
     <h2><span class="eyebrow">Path</span>訓練之路</h2>
