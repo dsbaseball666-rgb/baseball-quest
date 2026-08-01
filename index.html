@@ -534,6 +534,14 @@ function resetTeamBoss(){
     render();
   });
 }
+function resetBossRoster(){
+  askConfirm('這會把怪物名冊換成最新的完整怪物圖鑑（40隻，含圖片）。目前戰鬥中的 Boss 血量／進度不會受影響，但你自己新增過的怪物會被換掉。確定要更新嗎？', async ()=>{
+    state.config.bossRoster = DEFAULT_BOSS_ROSTER.slice();
+    await saveConfig(state.config);
+    showToast('已更新為最新完整怪物圖鑑！');
+    render();
+  });
+}
 async function saveBossDodgeChance(){
   const pct = Number(state.bossDodgeDraft);
   if(isNaN(pct) || pct<0 || pct>100){ showToast('請輸入 0-100 之間的數字'); return; }
@@ -713,6 +721,7 @@ let state = {
   editingItemId: null,
   addQDraft: {q:'', options:['','','',''], correct:0, tag:'', subTag:''},
   redeemDraft: {},
+  energyAdjustDraft: {},
   videoUploadedDraft: false,
   viewingPlayer: null,
   formUrlDraft: '',
@@ -1216,6 +1225,17 @@ async function redeemPoints(name){
   await savePlayer(p);
   state.redeemDraft[name] = '';
   showToast(name+' 已兌換 '+amt+' 點');
+  await refreshOverview();
+}
+async function adjustEnergy(name){
+  const raw = state.energyAdjustDraft[name];
+  const delta = Number(raw);
+  if(!raw || isNaN(delta) || delta===0){ showToast('請輸入要調整的能量，正數增加、負數減少'); return; }
+  const p = normalizePlayer(await getPlayer(name));
+  p.energy = Math.max(0, p.energy + delta);
+  await savePlayer(p);
+  state.energyAdjustDraft[name] = '';
+  showToast(name+' 的能量已調整為 '+p.energy+' ⚡');
   await refreshOverview();
 }
 function deletePlayer(name){
@@ -1815,7 +1835,11 @@ function renderCoachRole(){
       <tr><td>${t.image?`<img src="${t.image}" style="width:40px;height:40px;image-rendering:pixelated;">`:esc(t.emoji||'')}</td><td>${esc(t.name)}</td><td>${esc(t.quote||'')}</td><td><button class="btn secondary small" onclick="deleteBossTemplate('${t.id}')">刪除</button></td></tr>
     `).join('');
     body = `
-    <div class="small-note" style="margin-bottom:10px;">這裡是所有可以出現的怪物／Boss 造型（目前已經匯入一套完整的怪物圖鑑，從小怪一路到首領）。每次全隊打倒目前的敵人，會自動換成名冊裡的下一隻；你也可以隨時到「隊伍總覽」用下拉選單手動切換。這裡新增的是 emoji 版本，如果想用圖片版本，需要透過我來加入圖檔。</div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <div class="small-note" style="margin-bottom:8px;">如果下拉選單裡看不到新的怪物圖片，通常是因為你之前已經存過舊版名冊。按下面按鈕會把名冊整個換成最新的完整怪物圖鑑（40 隻，含圖片）。<b>目前戰鬥中的 Boss 血量／進度不會受影響</b>，但如果你自己手動新增過的怪物會被換掉，需要的話請重新加回來。</div>
+      <button class="btn secondary" onclick="resetBossRoster()">🖼️ 匯入最新完整怪物圖鑑（40隻）</button>
+    </div>
+    <div class="small-note" style="margin-bottom:10px;">這裡是所有可以出現的怪物／Boss 造型。每次全隊打倒目前的敵人，會自動換成名冊裡的下一隻；你也可以隨時到「隊伍總覽」用下拉選單手動切換。</div>
     <table><thead><tr><th>圖示</th><th>名稱</th><th>台詞</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=4 class="empty">尚無怪物</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
       <div class="row-flex">
@@ -1979,8 +2003,10 @@ function renderCoachRole(){
         <td>${p.points}</td>
         <td>${p.streak}🔥</td>
         <td>${acc}%</td>
-        <td style="min-width:210px;">
+        <td style="min-width:280px;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input type="number" placeholder="⚡能量+/-" style="width:80px;" value="${state.energyAdjustDraft[p.name]||''}" oninput="state.energyAdjustDraft['${esc(p.name)}']=this.value">
+            <button class="btn secondary small" onclick="adjustEnergy('${esc(p.name)}')">調整能量</button>
             <input type="number" placeholder="點數" style="width:70px;" value="${state.redeemDraft[p.name]||''}" oninput="state.redeemDraft['${esc(p.name)}']=this.value">
             <button class="btn secondary small" onclick="redeemPoints('${esc(p.name)}')">兌換</button>
             <button class="btn secondary small" onclick="viewPlayerLog('${esc(p.name)}')">查看紀錄</button>
