@@ -395,7 +395,8 @@ function buildDefaultConfig(){
         {level:15, title:'治療見習', desc:'祝禱更有效，每次命中額外獲得點數', bonusDamage:0, dodgeReduction:0, bonusPoints:4},
         {level:30, title:'大祭司', desc:'祝禱大成，點數加成提升並帶來一絲敏捷', bonusDamage:0, dodgeReduction:0.06, bonusPoints:9}
       ]
-    }
+    },
+    starterCharacterIds: STARTER_CHARACTER_IDS.slice()
   };
 }
 async function getConfig(){
@@ -412,6 +413,7 @@ async function getConfig(){
     if(!parsed.bossRoster || !parsed.bossRoster.length) parsed.bossRoster = DEFAULT_BOSS_ROSTER.slice();
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
     if(!parsed.classTiers) parsed.classTiers = buildDefaultConfig().classTiers;
+    if(!parsed.starterCharacterIds || !parsed.starterCharacterIds.length) parsed.starterCharacterIds = STARTER_CHARACTER_IDS.slice();
     (parsed.skillRoster||[]).forEach(s=>{
       if(!s.stages || !s.stages.length){
         // 舊版單階技能格式，轉換成一個階段
@@ -725,6 +727,12 @@ function classTierNext(characterId, level){
   const tiers = classTiersFor(characterId).slice().sort((a,b)=>a.level-b.level);
   return tiers.find(t=>t.level>level) || null;
 }
+function classTierPathSummary(characterId){
+  const tiers = classTiersFor(characterId).slice().sort((a,b)=>a.level-b.level);
+  const evolutions = tiers.filter(t=>t.level>1);
+  if(!evolutions.length) return '';
+  return evolutions.map(t=>'Lv.'+t.level+' → '+t.title).join('　');
+}
 function activePassiveBonuses(p){
   const fromSkills = unlockedSkills(p).filter(s=>s.type==='passive').reduce((acc,s)=>{
     const stage = skillCurrentStage(s, p.level);
@@ -852,6 +860,19 @@ async function removeClassTier(characterId, level){
   if(!state.config.classTiers || !state.config.classTiers[characterId]) return;
   state.config.classTiers[characterId] = state.config.classTiers[characterId].filter(t=>t.level!==level);
   await saveConfig(state.config);
+  render();
+}
+async function toggleStarterCharacter(characterId){
+  if(!state.config.starterCharacterIds) state.config.starterCharacterIds = STARTER_CHARACTER_IDS.slice();
+  const idx = state.config.starterCharacterIds.indexOf(characterId);
+  if(idx>=0){
+    if(state.config.starterCharacterIds.length<=1){ showToast('至少要保留一個新手可選角色喔'); return; }
+    state.config.starterCharacterIds.splice(idx,1);
+  } else {
+    state.config.starterCharacterIds.push(characterId);
+  }
+  await saveConfig(state.config);
+  showToast('已更新新手可選角色清單');
   render();
 }
 function todayStr(){
@@ -1654,11 +1675,14 @@ function renderCoachLoginModal(){
 
 function renderAvatarPickerModal(){
   const p = state.playerData;
-  const grid = CHARACTER_ROSTER.filter(c=>STARTER_CHARACTER_IDS.includes(c.id)).map(c=>{
+  const starterIds = (state.config.starterCharacterIds && state.config.starterCharacterIds.length) ? state.config.starterCharacterIds : STARTER_CHARACTER_IDS;
+  const grid = CHARACTER_ROSTER.filter(c=>starterIds.includes(c.id)).map(c=>{
     const selected = p.avatarId===c.id;
-    return `<div onclick="changeAvatar('${c.id}')" style="cursor:pointer;text-align:center;padding:6px;border-radius:10px;border:2px solid ${selected?'var(--accent-light)':'transparent'};background:${selected?'rgba(255,209,102,0.12)':'transparent'};">
+    const path = classTierPathSummary(c.id);
+    return `<div onclick="changeAvatar('${c.id}')" style="cursor:pointer;text-align:center;padding:8px 6px;border-radius:10px;border:2px solid ${selected?'var(--accent-light)':'transparent'};background:${selected?'rgba(255,209,102,0.12)':'transparent'};">
       <img src="${c.image}" style="width:56px;height:56px;image-rendering:pixelated;">
       <div style="font-size:11px;color:${selected?'var(--accent-light)':'var(--text-dim)'};margin-top:2px;">${esc(c.name)}</div>
+      ${path?`<div class="small-note" style="font-size:9px;line-height:1.4;margin-top:2px;">${esc(path)}</div>`:''}
     </div>`;
   }).join('');
   return `
@@ -1847,11 +1871,14 @@ function renderPlayerRole(){
         <div class="lv">查看進度 →</div>
       </div>`;
     }).join('');
-    let avatarPickerHtml = CHARACTER_ROSTER.filter(c=>STARTER_CHARACTER_IDS.includes(c.id)).map(c=>{
+    const starterIds = (state.config.starterCharacterIds && state.config.starterCharacterIds.length) ? state.config.starterCharacterIds : STARTER_CHARACTER_IDS;
+    let avatarPickerHtml = CHARACTER_ROSTER.filter(c=>starterIds.includes(c.id)).map(c=>{
       const selected = state.newPlayerAvatarId===c.id;
-      return `<div onclick="state.newPlayerAvatarId='${c.id}';render();" style="cursor:pointer;text-align:center;padding:6px;border-radius:10px;border:2px solid ${selected?'var(--accent-light)':'transparent'};background:${selected?'rgba(255,209,102,0.12)':'transparent'};">
+      const path = classTierPathSummary(c.id);
+      return `<div onclick="state.newPlayerAvatarId='${c.id}';render();" style="cursor:pointer;text-align:center;padding:8px 6px;border-radius:10px;border:2px solid ${selected?'var(--accent-light)':'transparent'};background:${selected?'rgba(255,209,102,0.12)':'transparent'};">
         <img src="${c.image}" style="width:56px;height:56px;image-rendering:pixelated;">
         <div style="font-size:11px;color:${selected?'var(--accent-light)':'var(--text-dim)'};margin-top:2px;">${esc(c.name)}</div>
+        ${path?`<div class="small-note" style="font-size:9px;line-height:1.4;margin-top:2px;">${esc(path)}</div>`:''}
       </div>`;
     }).join('');
     return `
@@ -2410,10 +2437,16 @@ function renderCoachRole(){
       const tiers = (state.config.classTiers && state.config.classTiers[c.id] || []).slice().sort((a,b)=>a.level-b.level);
       const chips = tiers.map(t=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-deep);border:1px solid var(--line);border-radius:12px;padding:3px 8px;margin:2px 4px 2px 0;font-size:11px;">Lv.${t.level} ${esc(t.title)}（${esc(tierChipDesc(t))}）<span title="移除這個階級" style="cursor:pointer;color:var(--accent-red);" onclick="removeClassTier('${c.id}',${t.level})">✕</span></span>`).join('');
       const d = state.classTierDraft[c.id] || {};
+      const isStarter = (state.config.starterCharacterIds||[]).includes(c.id);
       return `<div class="panel" style="background:var(--bg-panel-2);margin-top:10px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <img src="${c.image}" style="width:36px;height:36px;image-rendering:pixelated;border-radius:6px;">
-          <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);">${esc(c.name)}</div>
+        <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <img src="${c.image}" style="width:36px;height:36px;image-rendering:pixelated;border-radius:6px;">
+            <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);">${esc(c.name)}</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;color:var(--text-chalk);font-size:13px;">
+            <input type="checkbox" style="width:auto;" ${isStarter?'checked':''} onchange="toggleStarterCharacter('${c.id}')">開放為新手可選角色
+          </label>
         </div>
         <div style="margin-top:8px;">${chips || '<span class="small-note">尚未設定轉職階級</span>'}</div>
         <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
@@ -2428,7 +2461,7 @@ function renderCoachRole(){
       </div>`;
     }).join('');
     body = `
-    <div class="small-note" style="margin-bottom:10px;">每個角色可以設定「轉職」階級——球員選了這個角色、等級到了，會自動變成該階級的稱號與被動加成（跟技能一樣是直接變成新階級，不會疊加同角色自己的舊階級）。目前已經幫「見習劍士／見習法師／見習射手／見習牧師」預設了 Lv.1→15→30 三階轉職，其他角色可以自己在這裡新增。</div>
+    <div class="small-note" style="margin-bottom:10px;">每個角色可以設定「轉職」階級——球員選了這個角色、等級到了，會自動變成該階級的稱號與被動加成（跟技能一樣是直接變成新階級，不會疊加同角色自己的舊階級）。勾選「開放為新手可選角色」可以讓這個角色出現在球員建立/更換角色的選單裡。</div>
     ${sections}`;
   } else if(state.coachTab==='bonus'){
     let rows = (state.config.bonusTasks||[]).map(t=>`
