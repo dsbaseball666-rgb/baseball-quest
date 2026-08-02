@@ -294,7 +294,7 @@ function buildDefaultConfig(){
         {label:'自訂內容', xp:1, points:1}
       ]},
       {id:'pitching', name:'投球練習', xp:10, points:5, required:false, requireVideo:false, subOptions:[]},
-      {id:'training_log', name:'訓練日誌', xp:15, points:8, required:false, requireVideo:true, subOptions:[]}
+      {id:'training_log', name:'訓練日誌', xp:15, points:8, required:false, requireVideo:false, requireLogForm:true, subOptions:[]}
     ],
     questions:[
       {id:'q1', q:'打擊時，重心應該放在？', options:['前腳','後腳','雙腳平均','腳尖'], correct:2, tag:null, subTag:null},
@@ -433,6 +433,11 @@ async function getConfig(){
       if(it.required==null) it.required = false;
       if(it.requireVideo==null) it.requireVideo = false;
       if(it.points==null) it.points = 0;
+      if(it.requireLogForm==null) it.requireLogForm = false;
+      if(it.id==='training_log' && !it.requireLogForm){
+        it.requireVideo = false;
+        it.requireLogForm = true;
+      }
     });
     (parsed.questions||[]).forEach(q=>{ if(q.subTag===undefined) q.subTag = null; });
     return parsed;
@@ -928,9 +933,12 @@ let state = {
   showTutorial: false,
   showBattleModal: false,
   showSkillDetail: null,
+  viewingJournalIndex: null,
+  showJournalForm: null,
+  journalFormDraft: {},
   tutorialStep: 0,
   playerChips: [],
-  addItemDraft: {name:'', xp:10, points:5, required:false, requireVideo:false, subOptionsText:''},
+  addItemDraft: {name:'', xp:10, points:5, required:false, requireVideo:false, requireLogForm:false, subOptionsText:''},
   editingItemId: null,
   addQDraft: {q:'', options:['','','',''], correct:0, tag:'', subTag:''},
   redeemDraft: {},
@@ -1097,9 +1105,42 @@ function toggleVideoUploaded(){
   render();
 }
 let checklistDraft = {};
+let journalDraft = {}; // itemId -> 已填寫的訓練日誌內容
 function toggleItem(id){
+  if(!checklistDraft[id]){
+    const it = state.config.items.find(i=>i.id===id);
+    if(it && it.requireLogForm){
+      state.showJournalForm = id;
+      state.journalFormDraft = Object.assign({}, journalDraft[id]||{});
+      render();
+      return;
+    }
+  }
   checklistDraft[id] = !checklistDraft[id];
-  if(!checklistDraft[id]){ delete subDraft[id]; }
+  if(!checklistDraft[id]){ delete subDraft[id]; delete journalDraft[id]; }
+  render();
+}
+function submitJournalForm(){
+  const itemId = state.showJournalForm;
+  const d = state.journalFormDraft || {};
+  if(!d.satisfaction || !d.focus){ showToast('請至少完成「滿意度」與「專注度自評」'); return; }
+  journalDraft[itemId] = {
+    satisfaction: d.satisfaction,
+    improve: (d.improve||'').trim(),
+    focus: d.focus,
+    goalMet: d.goalMet||'',
+    goalNote: (d.goalNote||'').trim(),
+    messageToCoach: (d.messageToCoach||'').trim()
+  };
+  checklistDraft[itemId] = true;
+  state.showJournalForm = null;
+  state.journalFormDraft = {};
+  showToast('訓練日誌已填寫完成！');
+  render();
+}
+function cancelJournalForm(){
+  state.showJournalForm = null;
+  state.journalFormDraft = {};
   render();
 }
 function toggleSubOption(itemId, label){
@@ -1140,6 +1181,13 @@ async function submitPractice(){
       if(usesCustom && !d.custom.trim()){ showToast('「'+it.name+'」的自訂內容請填寫說明'); return; }
     }
   }
+  // 檢查需要線上填寫日誌的項目，是否已經填寫
+  for(const it of chosen){
+    if(it.requireLogForm && !journalDraft[it.id]){
+      showToast('「'+it.name+'」請先完成線上填寫');
+      return;
+    }
+  }
   const needsVideo = chosen.some(it=>it.requireVideo);
   if(needsVideo && !state.videoUploadedDraft){
     showToast('此任務需要上傳證明（照片／影片），請先上傳並勾選「已上傳今天的證明」');
@@ -1160,6 +1208,7 @@ async function submitPractice(){
     p.lastDate = today;
   }
   const videoDone = !!state.videoUploadedDraft;
+  let logJournal = null;
   const itemsForLog = chosen.map(it=>{
     let detail = '';
     if(it.subOptions && it.subOptions.length){
@@ -1167,17 +1216,23 @@ async function submitPractice(){
       const labels = Object.keys(d.picks).filter(k=>d.picks[k] && k!=='自訂內容').concat(d.picks['自訂內容']?[d.custom.trim()]:[]);
       detail = labels.join('、');
     }
+    if(it.requireLogForm && journalDraft[it.id]){
+      logJournal = journalDraft[it.id];
+      detail = '已線上填寫';
+    }
     return {name: it.name, detail};
   });
   p.log.unshift({
     date:today, items:itemsForLog, xp:rewards.energy, coins:rewards.points,
     video:videoDone, needsReview:needsVideo,
-    reviewStatus: needsVideo ? 'pending' : 'approved'
+    reviewStatus: needsVideo ? 'pending' : 'approved',
+    journal: logJournal
   });
   p.log = p.log.slice(0,20);
   await savePlayer(p);
   checklistDraft = {};
   subDraft = {};
+  journalDraft = {};
   state.videoUploadedDraft = false;
   showToast('練習已記錄！獲得 ⚡'+rewards.energy+' 能量、💰'+rewards.points+' 點數'+(needsVideo?'，等待教練審核':''));
   render();
@@ -1344,17 +1399,18 @@ async function addItem(){
       it.points = Number(d.points)||0;
       it.required = !!d.required;
       it.requireVideo = !!d.requireVideo;
+      it.requireLogForm = !!d.requireLogForm;
       it.subOptions = subOptions;
     }
     state.editingItemId = null;
     showToast('已更新項目');
   } else {
     const id = 'it_'+Date.now();
-    state.config.items.push({id, name:d.name.trim(), xp:Number(d.xp)||1, points:Number(d.points)||0, required:!!d.required, requireVideo:!!d.requireVideo, subOptions});
+    state.config.items.push({id, name:d.name.trim(), xp:Number(d.xp)||1, points:Number(d.points)||0, required:!!d.required, requireVideo:!!d.requireVideo, requireLogForm:!!d.requireLogForm, subOptions});
     showToast('已新增項目');
   }
   await saveConfig(state.config);
-  state.addItemDraft = {name:'', xp:10, points:5, required:false, requireVideo:false, subOptionsText:''};
+  state.addItemDraft = {name:'', xp:10, points:5, required:false, requireVideo:false, requireLogForm:false, subOptionsText:''};
   render();
 }
 function editItem(id){
@@ -1362,14 +1418,14 @@ function editItem(id){
   if(!it) return;
   state.editingItemId = id;
   state.addItemDraft = {
-    name: it.name, xp: it.xp, points: it.points||0, required: !!it.required, requireVideo: !!it.requireVideo,
+    name: it.name, xp: it.xp, points: it.points||0, required: !!it.required, requireVideo: !!it.requireVideo, requireLogForm: !!it.requireLogForm,
     subOptionsText: (it.subOptions||[]).map(o=>o.label+' / '+o.xp+' / '+(o.points||0)).join('\n')
   };
   render();
 }
 function cancelEditItem(){
   state.editingItemId = null;
-  state.addItemDraft = {name:'', xp:10, points:5, required:false, requireVideo:false, subOptionsText:''};
+  state.addItemDraft = {name:'', xp:10, points:5, required:false, requireVideo:false, requireLogForm:false, subOptionsText:''};
   render();
 }
 async function deleteItem(id){
@@ -1477,14 +1533,18 @@ async function doBuyShopItem(item, useDate){
   showToast('已兌換「'+item.name+'」！'+(useDate?('預定使用日期：'+useDate):''));
   render();
 }
-async function useInventoryItem(invId){
-  const p = state.playerData;
-  const inv = p.inventory.find(i=>i.id===invId);
+async function confirmItemUsed(playerName, invId){
+  const p = await getPlayer(playerName);
+  if(!p) return;
+  const inv = (p.inventory||[]).find(i=>i.id===invId);
   if(!inv || inv.status==='used') return;
   inv.status = 'used';
   inv.usedAt = todayStr();
   await savePlayer(p);
-  showToast('已標記使用：'+inv.itemName);
+  showToast('已確認「'+inv.itemName+'」使用完成');
+  if(state.viewingPlayer && state.viewingPlayer.name===playerName){
+    state.viewingPlayer = normalizePlayer(p);
+  }
   render();
 }
 async function saveFormUrl(){
@@ -1673,6 +1733,57 @@ function renderCoachLoginModal(){
   </div>`;
 }
 
+function renderJournalFormModal(){
+  const d = state.journalFormDraft || {};
+  const scaleOptions = (val)=>[1,2,3,4,5].map(n=>`<option value="${n}" ${val==n?'selected':''}>${n}</option>`).join('');
+  return `
+  <div class="modal-bg" onclick="if(event.target===this) cancelJournalForm()">
+    <div class="modal" style="max-width:440px;max-height:85vh;overflow-y:auto;">
+      <h3>📖 填寫訓練日誌</h3>
+      <div class="small-note" style="margin-bottom:10px;">線上填寫就好，不用拍照喔！</div>
+      <div style="margin-bottom:12px;">
+        <label>這週練習的滿意度（1 很不滿意 ～ 5 非常滿意）</label>
+        <select onchange="state.journalFormDraft.satisfaction=this.value">
+          <option value="">請選擇</option>
+          ${scaleOptions(d.satisfaction)}
+        </select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>這週想改善的地方</label>
+        <textarea rows="2" oninput="state.journalFormDraft.improve=this.value" placeholder="例如：揮棒時重心不穩">${esc(d.improve||'')}</textarea>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>專注度自評（1 很不專心 ～ 5 非常專心）</label>
+        <select onchange="state.journalFormDraft.focus=this.value">
+          <option value="">請選擇</option>
+          ${scaleOptions(d.focus)}
+        </select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>有沒有達成這週設定的目標？</label>
+        <select onchange="state.journalFormDraft.goalMet=this.value">
+          <option value="">請選擇</option>
+          <option value="有達成" ${d.goalMet==='有達成'?'selected':''}>有達成</option>
+          <option value="部分達成" ${d.goalMet==='部分達成'?'selected':''}>部分達成</option>
+          <option value="沒有達成" ${d.goalMet==='沒有達成'?'selected':''}>沒有達成</option>
+        </select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>目標達成情況說明（選填）</label>
+        <input type="text" value="${esc(d.goalNote||'')}" oninput="state.journalFormDraft.goalNote=this.value" placeholder="簡單說明一下">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>想對教練說的話（選填）</label>
+        <textarea rows="2" oninput="state.journalFormDraft.messageToCoach=this.value" placeholder="有什麼想讓教練知道的嗎？">${esc(d.messageToCoach||'')}</textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn secondary" onclick="cancelJournalForm()">取消</button>
+        <button class="btn gold" onclick="submitJournalForm()">完成填寫</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderAvatarPickerModal(){
   const p = state.playerData;
   const starterIds = (state.config.starterCharacterIds && state.config.starterCharacterIds.length) ? state.config.starterCharacterIds : STARTER_CHARACTER_IDS;
@@ -1830,14 +1941,18 @@ function renderPlayerLogModal(){
     } else {
       statusCell = '<span class="small-note">未上傳</span>';
     }
-    return `<tr><td>${esc(l.date)}</td><td>${esc(logItemsDisplay(l))}</td><td>+${l.xp}⚡ +${l.coins||0}💰</td><td>${statusCell}</td></tr>`;
+    let journalBtn = '';
+    if(l.journal){
+      journalBtn = ` <button class="btn secondary small" onclick="state.viewingJournalIndex=${i};render();">📖 查看日誌</button>`;
+    }
+    return `<tr><td>${esc(l.date)}</td><td>${esc(logItemsDisplay(l))}${journalBtn}</td><td>+${l.xp}⚡ +${l.coins||0}💰</td><td>${statusCell}</td></tr>`;
   }).join('') || '<tr><td colspan=4 class="empty">尚無練習紀錄</td></tr>';
   const bonusRows = (p.bonusLog||[]).slice(0,10).map(b=>`<tr><td>${esc(b.date)}</td><td>${esc(b.name)}</td><td>+${b.points}</td></tr>`).join('') || '<tr><td colspan=3 class="empty">尚無額外任務紀錄</td></tr>';
   const invRows = (p.inventory||[]).slice(0,15).map(inv=>{
     let statusText;
-    if(inv.status==='used') statusText = `<span style="color:var(--text-dim);">已使用（${esc(inv.usedAt)}）</span>`;
+    if(inv.status==='used') statusText = `<span style="color:var(--accent-green);">✅ 已確認使用（${esc(inv.usedAt)}）</span>`;
     else if(inv.status==='scheduled') statusText = `<span style="color:var(--accent-light);">已排定：${esc(inv.useDate)}</span>`;
-    else statusText = '<span style="color:var(--accent-green);">未使用</span>';
+    else statusText = `<span style="color:var(--text-dim);">⏳ 未使用</span> <button class="btn secondary small" onclick="confirmItemUsed('${esc(p.name)}','${inv.id}')">確認使用</button>`;
     return `<tr><td>${esc(inv.itemName)}</td><td>${esc(inv.purchaseDate)}</td><td>-${inv.cost}</td><td>${statusText}</td></tr>`;
   }).join('') || '<tr><td colspan=4 class="empty">物品欄是空的</td></tr>';
   return `
@@ -1854,6 +1969,38 @@ function renderPlayerLogModal(){
       <tbody>${invRows}</tbody></table>
       <div style="margin-top:14px;text-align:right;">
         <button class="btn secondary small" onclick="closePlayerLog()">關閉</button>
+      </div>
+    </div>
+  </div>
+  ${state.viewingJournalIndex!=null ? renderJournalViewModal() : ''}`;
+}
+
+function journalFieldLabels(){
+  return [
+    {key:'satisfaction', label:'這週練習的滿意度'},
+    {key:'improve', label:'這週想改善的地方'},
+    {key:'focus', label:'專注度自評'},
+    {key:'goalMet', label:'有沒有達成這週設定的目標'},
+    {key:'goalNote', label:'目標達成情況說明'},
+    {key:'messageToCoach', label:'想對教練說的話'}
+  ];
+}
+function renderJournalViewModal(){
+  const p = state.viewingPlayer;
+  const l = p.log[state.viewingJournalIndex];
+  if(!l || !l.journal){ return ''; }
+  const rows = journalFieldLabels().map(f=>{
+    const v = l.journal[f.key];
+    if(!v) return '';
+    return `<div style="margin-bottom:10px;"><div class="small-note" style="font-weight:600;">${esc(f.label)}</div><div style="font-size:14px;">${esc(v)}</div></div>`;
+  }).join('');
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){state.viewingJournalIndex=null;render();}">
+    <div class="modal" style="max-width:420px;max-height:80vh;overflow-y:auto;">
+      <h3>📖 ${esc(l.date)} 訓練日誌</h3>
+      ${rows || '<div class="empty">沒有內容</div>'}
+      <div style="margin-top:14px;text-align:right;">
+        <button class="btn secondary small" onclick="state.viewingJournalIndex=null;render();">關閉</button>
       </div>
     </div>
   </div>`;
@@ -1946,7 +2093,7 @@ function renderPlayerRole(){
     const alreadyDone = doneToday.has(it.name);
     const checked = !!checklistDraft[it.id];
     const hasSubOptions = it.subOptions && it.subOptions.length>0;
-    const badges = (it.required?' <span style="color:var(--accent-light);">⭐每日任務</span>':'') + (it.requireVideo?' <span style="color:var(--accent-red);">📎需上傳證明</span>':'') + (alreadyDone?' <span style="color:var(--accent-green);">✅ 今天已完成</span>':'');
+    const badges = (it.required?' <span style="color:var(--accent-light);">⭐每日任務</span>':'') + (it.requireVideo?' <span style="color:var(--accent-red);">📎需上傳證明</span>':'') + (it.requireLogForm?' <span style="color:var(--accent-light);">📖需線上填寫</span>':'') + (alreadyDone?' <span style="color:var(--accent-green);">✅ 今天已完成</span>':'');
     let subHtml = '';
     if(!alreadyDone && checked && hasSubOptions){
       const d = subDraft[it.id] || {picks:{}, custom:''};
@@ -1988,6 +2135,7 @@ function renderPlayerRole(){
     } else if(typeof l.video==='string' && l.video){
       statusLine = ` · <a href="${esc(l.video)}" target="_blank" rel="noopener" style="color:var(--accent-light);">▶ 查看影片</a>`;
     }
+    if(l.journal){ statusLine += ' · <span style="color:var(--accent-light);">📖 已填寫日誌</span>'; }
     return `<div class="small-note">${esc(l.date)} · ${esc(logItemsDisplay(l))} · +${l.xp}⚡ +${l.coins||0}💰${statusLine}</div>`;
   }).join('') || '<div class="empty">尚無紀錄</div>';
 
@@ -2041,15 +2189,14 @@ function renderPlayerRole(){
   }).join('') || '<div class="empty">教練尚未上架任何商品</div>';
 
   const invStatusLabel = (inv)=>{
-    if(inv.status==='used') return `<span style="color:var(--accent-dim,var(--text-dim));">已使用（${esc(inv.usedAt)}）</span>`;
+    if(inv.status==='used') return `<span style="color:var(--accent-green);">✅ 教練已確認使用（${esc(inv.usedAt)}）</span>`;
     if(inv.status==='scheduled') return `<span style="color:var(--accent-light);">已排定：${esc(inv.useDate)}</span>`;
-    return `<span style="color:var(--accent-green);">未使用</span>`;
+    return `<span style="color:var(--text-dim);">⏳ 未使用，等教練確認</span>`;
   };
   let inventoryRows = (p.inventory||[]).map(inv=>`
     <div class="item-row" style="cursor:default;">
       <span>${esc(inv.itemName)}</span>
       <span class="small-note" style="margin-left:8px;">${invStatusLabel(inv)}</span>
-      ${inv.status==='unused' ? `<button class="btn secondary small" onclick="useInventoryItem('${inv.id}')" style="margin-left:auto;">標記已使用</button>` : ''}
     </div>`).join('') || '<div class="empty">物品欄是空的，去商店兌換點東西吧！</div>';
 
   return `
@@ -2097,12 +2244,13 @@ function renderPlayerRole(){
     </div>
   </div>
   ${state.showAvatarPicker ? renderAvatarPickerModal() : ''}
+  ${state.showJournalForm ? renderJournalFormModal() : ''}
   ${state.showTutorial ? renderTutorialModal() : ''}
 
   <div class="panel">
     <h2><span class="eyebrow">Inventory</span>🎒 我的物品欄</h2>
     <div class="item-list">${inventoryRows}</div>
-    <div class="small-note" style="margin-top:8px;">「標記已使用」是給教練參考的紀錄，實際兌換（例如拿手套、請假）還是要跟教練當面確認喔。</div>
+    <div class="small-note" style="margin-top:8px;">物品的「使用」狀態需要教練在後台確認，不能自己標記喔——去跟教練當面兌換（例如拿手套、請假）之後，請教練幫你確認。</div>
   </div>
 
   <div class="panel battle-card" id="battle-panel" style="cursor:pointer;padding:16px;" onclick="state.showBattleModal=true;render();">
@@ -2274,6 +2422,7 @@ function renderCoachRole(){
       <div style="display:flex;gap:18px;margin-top:10px;flex-wrap:wrap;">
         <label style="display:flex;align-items:center;gap:6px;color:var(--text-chalk);"><input type="checkbox" style="width:auto;" ${state.addItemDraft.required?'checked':''} onchange="state.addItemDraft.required=this.checked">設為每日必做任務</label>
         <label style="display:flex;align-items:center;gap:6px;color:var(--text-chalk);"><input type="checkbox" style="width:auto;" ${state.addItemDraft.requireVideo?'checked':''} onchange="state.addItemDraft.requireVideo=this.checked">需要照片／影片證明</label>
+        <label style="display:flex;align-items:center;gap:6px;color:var(--text-chalk);"><input type="checkbox" style="width:auto;" ${state.addItemDraft.requireLogForm?'checked':''} onchange="state.addItemDraft.requireLogForm=this.checked">需要線上填寫表單（如訓練日誌，勾選後不需要拍照）</label>
       </div>
       <div style="margin-top:10px;">
         <label>內容選項（選填，每行一個，格式為「名稱 / 能量值 / 點數」；學生勾選這個項目時可複選內容，能量與點數都會加總。若要讓學生自己填寫，新增一行「自訂內容 / 能量值 / 點數」）</label>
