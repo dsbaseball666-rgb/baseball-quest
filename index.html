@@ -2177,7 +2177,7 @@ function renderPlayerRole(){
     }
     const xpTag = hasSubOptions ? '依內容選項加總' : `⚡${it.xp} 💰${it.points||0}`;
     return `<div>
-      <div class="item-row ${alreadyDone?'done':''}" onclick="${alreadyDone?'':`toggleItem('${it.id}')`}">
+      <div class="item-row ${alreadyDone?'done':''}" onclick="${alreadyDone?`showToast('「${esc(it.name)}」今天已經完成囉，明天再來！')`:`toggleItem('${it.id}')`}">
         <input type="checkbox" ${(checked||alreadyDone)?'checked':''} ${alreadyDone?'disabled':''} onclick="event.stopPropagation()" onchange="toggleItem('${it.id}')">
         <span>${esc(it.name)}${badges}</span>
         <span class="xp-tag">${xpTag}</span>
