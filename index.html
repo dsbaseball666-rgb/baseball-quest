@@ -576,6 +576,9 @@ function normalizePlayer(p){
   if(p.level>50) p.level = 50;
   if(p.tutorialSeen===undefined) p.tutorialSeen = false;
   if(p.ultimateGauge==null) p.ultimateGauge = 0;
+  if(p.lastLongGoalDate===undefined) p.lastLongGoalDate = null;
+  if(p.lastMidGoalDate===undefined) p.lastMidGoalDate = null;
+  if(p.lastShortGoalDate===undefined) p.lastShortGoalDate = null;
   return p;
 }
 function characterById(id){
@@ -972,6 +975,14 @@ function daysBetween(a,b){
   const da = new Date(a), db = new Date(b);
   return Math.round((db-da)/86400000);
 }
+function goalFieldsDue(p){
+  const today = todayStr();
+  return {
+    short: !p.lastShortGoalDate || daysBetween(p.lastShortGoalDate, today)>=7,
+    mid: !p.lastMidGoalDate || daysBetween(p.lastMidGoalDate, today)>=14,
+    long: !p.lastLongGoalDate || daysBetween(p.lastLongGoalDate, today)>=30
+  };
+}
 function logItemName(it){ return typeof it==='string' ? it : it.name; }
 function logItemDetail(it){ return (typeof it==='object' && it.detail) ? it.detail : ''; }
 function logItemsDisplay(log){
@@ -1214,6 +1225,36 @@ function toggleItem(id){
   if(!checklistDraft[id]){ delete subDraft[id]; delete journalDraft[id]; }
   render();
 }
+/* 獨立方格項目（訓練日誌、試煉之路）完成時，直接結算存檔，
+   不透過「修練之路」共用的紀錄練習流程，避免重新整理或未點提交就遺失進度 */
+async function finalizeSpecialItem(itemId, extra){
+  const it = state.config.items.find(i=>i.id===itemId);
+  if(!it) return null;
+  const p = state.playerData;
+  const today = todayStr();
+  const doneToday = doneNamesToday(p);
+  if(doneToday.has(it.name)){ showToast('「'+it.name+'」今天已經完成囉，明天再來！'); return null; }
+  const r = computeItemRewards(it);
+  p.energy += r.energy;
+  p.points += r.points;
+  const isNewDay = p.lastDate !== today;
+  if(isNewDay){
+    if(p.lastDate && daysBetween(p.lastDate, today)===1){ p.streak += 1; }
+    else { p.streak = 1; }
+    p.lastDate = today;
+  }
+  p.log.unshift({
+    date: today,
+    items: [{ name: it.name, detail: (extra && extra.detail) || '' }],
+    xp: r.energy, coins: r.points,
+    video: false, needsReview: false, reviewStatus: 'approved',
+    journal: (extra && extra.journal) || null
+  });
+  p.log = p.log.slice(0, 20);
+  await savePlayer(p);
+  render();
+  return r;
+}
 function openGeoChallenge(itemId){
   const qs = state.config.geoQuestions || [];
   if(!qs.length){ showToast('教練還沒有新增試煉之路的題目喔'); return; }
@@ -1222,29 +1263,28 @@ function openGeoChallenge(itemId){
   state.geoChallengeSelected = null;
   render();
 }
-function answerGeoChallenge(idx){
+async function answerGeoChallenge(idx){
   if(state.geoChallengeSelected!==null) return;
   const q = state.geoChallengeQ;
   const correct = idx===q.correct;
   state.geoChallengeSelected = idx;
   render();
-  setTimeout(()=>{
-    if(correct){
-      const itemId = state.showGeoChallenge;
-      checklistDraft[itemId] = true;
-      state.showGeoChallenge = null;
-      state.geoChallengeQ = null;
-      state.geoChallengeSelected = null;
-      showToast('🗺️ 答對了！試煉之路通過！');
-      render();
-    } else {
-      const qs = state.config.geoQuestions || [];
-      state.geoChallengeQ = qs[Math.floor(Math.random()*qs.length)];
-      state.geoChallengeSelected = null;
-      showToast('答錯了，再試一題！');
-      render();
-    }
-  }, 1400);
+  await new Promise(res=>setTimeout(res, 1400));
+  if(correct){
+    const itemId = state.showGeoChallenge;
+    state.showGeoChallenge = null;
+    state.geoChallengeQ = null;
+    state.geoChallengeSelected = null;
+    const r = await finalizeSpecialItem(itemId, {detail:'已通過試煉'});
+    if(r) showToast('🗺️ 答對了！試煉之路通過！獲得 ⚡'+r.energy+' 能量、💰'+r.points+' 點數');
+    render();
+  } else {
+    const qs = state.config.geoQuestions || [];
+    state.geoChallengeQ = qs[Math.floor(Math.random()*qs.length)];
+    state.geoChallengeSelected = null;
+    showToast('答錯了，再試一題！');
+    render();
+  }
 }
 function closeGeoChallenge(){
   state.showGeoChallenge = null;
@@ -1252,11 +1292,13 @@ function closeGeoChallenge(){
   state.geoChallengeSelected = null;
   render();
 }
-function submitJournalForm(){
+async function submitJournalForm(){
   const itemId = state.showJournalForm;
   const d = state.journalFormDraft || {};
   if(!d.satisfaction || !d.focus){ showToast('請至少完成「滿意度」與「專注度自評」'); return; }
-  journalDraft[itemId] = {
+  const p = state.playerData;
+  const due = goalFieldsDue(p);
+  const journal = {
     satisfaction: d.satisfaction,
     improve: (d.improve||'').trim(),
     focus: d.focus,
@@ -1264,10 +1306,14 @@ function submitJournalForm(){
     goalNote: (d.goalNote||'').trim(),
     messageToCoach: (d.messageToCoach||'').trim()
   };
-  checklistDraft[itemId] = true;
+  const today = todayStr();
+  if(due.short && (d.shortGoal||'').trim()){ journal.shortGoal = d.shortGoal.trim(); p.lastShortGoalDate = today; }
+  if(due.mid && (d.midGoal||'').trim()){ journal.midGoal = d.midGoal.trim(); p.lastMidGoalDate = today; }
+  if(due.long && (d.longGoal||'').trim()){ journal.longGoal = d.longGoal.trim(); p.lastLongGoalDate = today; }
   state.showJournalForm = null;
   state.journalFormDraft = {};
-  showToast('訓練日誌已填寫完成！');
+  const r = await finalizeSpecialItem(itemId, {detail:'已線上填寫', journal});
+  if(r) showToast('訓練日誌已填寫完成！獲得 ⚡'+r.energy+' 能量、💰'+r.points+' 點數');
   render();
 }
 function cancelJournalForm(){
@@ -1921,6 +1967,8 @@ function renderGeoChallengeModal(){
 
 function renderJournalFormModal(){
   const d = state.journalFormDraft || {};
+  const p = state.playerData;
+  const due = goalFieldsDue(p);
   const scaleOptions = (val)=>[1,2,3,4,5].map(n=>`<option value="${n}" ${val==n?'selected':''}>${n}</option>`).join('');
   return `
   <div class="modal-bg" onclick="if(event.target===this) cancelJournalForm()">
@@ -1958,6 +2006,21 @@ function renderJournalFormModal(){
         <label>目標達成情況說明（選填）</label>
         <input type="text" value="${esc(d.goalNote||'')}" oninput="state.journalFormDraft.goalNote=this.value" placeholder="簡單說明一下">
       </div>
+      ${due.short ? `
+      <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
+        <label>📅 短期目標（每週寫一次）</label>
+        <textarea rows="2" oninput="state.journalFormDraft.shortGoal=this.value" placeholder="這一週想達成什麼目標？">${esc(d.shortGoal||'')}</textarea>
+      </div>` : ''}
+      ${due.mid ? `
+      <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
+        <label>📅 中期目標（兩週寫一次）</label>
+        <textarea rows="2" oninput="state.journalFormDraft.midGoal=this.value" placeholder="接下來兩週想達成什麼目標？">${esc(d.midGoal||'')}</textarea>
+      </div>` : ''}
+      ${due.long ? `
+      <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
+        <label>📅 長期目標（一個月寫一次）</label>
+        <textarea rows="2" oninput="state.journalFormDraft.longGoal=this.value" placeholder="這一個月想達成什麼目標？">${esc(d.longGoal||'')}</textarea>
+      </div>` : ''}
       <div style="margin-bottom:12px;">
         <label>想對教練說的話（選填）</label>
         <textarea rows="2" oninput="state.journalFormDraft.messageToCoach=this.value" placeholder="有什麼想讓教練知道的嗎？">${esc(d.messageToCoach||'')}</textarea>
@@ -2185,6 +2248,9 @@ function journalFieldLabels(){
     {key:'focus', label:'專注度自評'},
     {key:'goalMet', label:'有沒有達成這週設定的目標'},
     {key:'goalNote', label:'目標達成情況說明'},
+    {key:'shortGoal', label:'短期目標（每週）'},
+    {key:'midGoal', label:'中期目標（兩週）'},
+    {key:'longGoal', label:'長期目標（一個月）'},
     {key:'messageToCoach', label:'想對教練說的話'}
   ];
 }
