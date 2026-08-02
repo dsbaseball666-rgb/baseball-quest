@@ -1559,6 +1559,17 @@ async function confirmItemUsed(playerName, invId){
   }
   render();
 }
+async function coachChangeAvatar(playerName, avatarId){
+  const p = await getPlayer(playerName);
+  if(!p) return;
+  p.avatarId = avatarId;
+  await savePlayer(p);
+  showToast('已幫「'+playerName+'」更換角色為「'+characterById(avatarId).name+'」');
+  if(state.viewingPlayer && state.viewingPlayer.name===playerName){
+    state.viewingPlayer = normalizePlayer(p);
+  }
+  render();
+}
 async function saveFormUrl(){
   const url = (state.formUrlDraft!==null && state.formUrlDraft!==''?state.formUrlDraft:(state.config.formUrl||'')).trim();
   const penalty = Number(state.penaltyDraft!==null && state.penaltyDraft!==''?state.penaltyDraft:(state.config.penaltyPoints!=null?state.config.penaltyPoints:30));
@@ -1977,10 +1988,17 @@ function renderPlayerLogModal(){
     else statusText = `<span style="color:var(--text-dim);">⏳ 未使用</span> <button class="btn secondary small" onclick="confirmItemUsed('${esc(p.name)}','${inv.id}')">確認使用</button>`;
     return `<tr><td>${esc(inv.itemName)}</td><td>${esc(inv.purchaseDate)}</td><td>-${inv.cost}</td><td>${statusText}</td></tr>`;
   }).join('') || '<tr><td colspan=4 class="empty">物品欄是空的</td></tr>';
+  const curChar = characterById(p.avatarId);
+  const avatarOptions = CHARACTER_ROSTER.map(c=>`<option value="${c.id}" ${p.avatarId===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
   return `
   <div class="modal-bg" onclick="if(event.target===this) closePlayerLog()">
     <div class="modal" style="max-width:600px;max-height:85vh;overflow-y:auto;">
       <h3>📋 ${esc(p.name)} 的練習紀錄</h3>
+      <div class="small-note" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <img src="${curChar.image}" style="width:28px;height:28px;image-rendering:pixelated;border-radius:6px;">
+        目前職業：${esc(curChar.name)}（學生自己不能改，只有這裡教練能改）
+        <select style="width:auto;max-width:140px;" onchange="coachChangeAvatar('${esc(p.name)}',this.value)">${avatarOptions}</select>
+      </div>
       <table><thead><tr><th>日期</th><th>項目</th><th>能量／點數</th><th>審核／證明</th></tr></thead>
       <tbody>${rows}</tbody></table>
       <h3 style="margin-top:18px;font-size:18px;">🎁 額外任務紀錄</h3>
@@ -2096,7 +2114,7 @@ function renderPlayerRole(){
       </div>
       <div style="margin-top:16px;">
         <label>選擇你的角色</label>
-        <div class="small-note" style="margin-bottom:10px;">職業會決定被動技能的成長方向。選好之後隨時可以到「更換角色」重選，不用擔心選錯！</div>
+        <div class="small-note" style="margin-bottom:10px;color:var(--accent-red);">⚠️ 職業選好之後就不能自己更改了，請仔細考慮清楚再選喔！（如果真的選錯，要請教練幫忙處理）</div>
         <div>${avatarPickerHtml}</div>
       </div>
       <div style="margin-top:14px;">
@@ -2256,7 +2274,6 @@ function renderPlayerRole(){
         <div style="font-family:var(--font-display);font-size:20px;color:var(--accent-light);">${esc(myTierTitle)}</div>
         ${myTier && myTier.desc ? `<div class="small-note">${esc(myTier.desc)}</div>` : ''}
         ${myNextTier ? `<div class="small-note" style="color:var(--accent-light);">⬆ Lv.${myNextTier.level} 轉職：${esc(myNextTier.title)}</div>` : ''}
-        <button class="btn secondary small" onclick="state.showAvatarPicker=true;render();">更換角色</button>
       </div>
     </div>
     <div class="small-note" style="margin-top:8px;">🪪 暱稱／ID：${esc(p.name)} ・ 本名：${esc(p.realName||'未填寫')}</div>
