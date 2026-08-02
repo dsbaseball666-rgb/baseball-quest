@@ -2301,6 +2301,20 @@ function renderPlayerRole(){
   const doneToday = doneNamesToday(p);
   const allDoneToday = state.config.items.length>0 && state.config.items.every(it=>doneToday.has(it.name));
 
+  const trainingLogItem = state.config.items.find(it=>it.id==='training_log');
+  const trialPathItem = state.config.items.find(it=>it.id==='trial_path');
+  function specialItemTile(it, icon, label){
+    if(!it) return '';
+    const done = doneToday.has(it.name);
+    return `<div class="panel battle-card" style="cursor:${done?'default':'pointer'};padding:14px;margin-top:0;${done?'opacity:0.6;':''}" onclick="${done?`showToast('「${esc(it.name)}」今天已經完成囉，明天再來！')`:`toggleItem('${it.id}')`}">
+      <div style="font-size:30px;">${icon}</div>
+      <div class="monster-name" style="font-size:15px;">${esc(it.name)}</div>
+      <div class="small-note">${done?'✅ 今天已完成':(label+' ・ ⚡'+it.xp+' 💰'+(it.points||0))}</div>
+    </div>`;
+  }
+  const trainingLogTile = specialItemTile(trainingLogItem, '📖', '點我線上填寫');
+  const trialPathTile = specialItemTile(trialPathItem, '🗺️', '點我挑戰');
+
   let questHint;
   if(!allDoneToday){
     questHint = { text:'先去完成今天的修練吧！勾選練習項目可以獲得能量和點數。', action:"state.showPathModal=true;render();", cta:'前往修練之路' };
@@ -2312,7 +2326,7 @@ function renderPlayerRole(){
     questHint = { text:'今天的任務都完成囉！明天再來累積更多能量與經驗值吧！', action:null, cta:null };
   }
 
-  let itemRows = state.config.items.map(it=>{
+  let itemRows = state.config.items.filter(it=>!it.requireLogForm && !it.requireGeoChallenge).map(it=>{
     const alreadyDone = doneToday.has(it.name);
     const checked = !!checklistDraft[it.id];
     const hasSubOptions = it.subOptions && it.subOptions.length>0;
@@ -2480,10 +2494,14 @@ function renderPlayerRole(){
     </div>
     ${state.showSkillDetail ? renderSkillDetailModal() : ''}
 
-    <div class="panel battle-card" id="shop-panel" style="cursor:pointer;padding:14px;margin-top:0;" onclick="state.showShopModal=true;render();">
-      <div style="font-size:34px;">🏪</div>
-      <div class="monster-name" style="font-size:16px;">福利社</div>
-      <div class="small-note">💰 ${p.points} 點 ・ 點我逛逛 →</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="panel battle-card" id="shop-panel" style="cursor:pointer;padding:14px;margin-top:0;" onclick="state.showShopModal=true;render();">
+        <div style="font-size:34px;">🏪</div>
+        <div class="monster-name" style="font-size:16px;">福利社</div>
+        <div class="small-note">💰 ${p.points} 點 ・ 點我逛逛 →</div>
+      </div>
+      ${trainingLogTile}
+      ${trialPathTile}
     </div>
     ${state.showShopModal ? renderShopModal(shopRows) : ''}
   </div>
