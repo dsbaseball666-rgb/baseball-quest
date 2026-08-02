@@ -1787,6 +1787,23 @@ async function refreshOverview(){
   state.teamBoss = await getTeamBoss();
   render();
 }
+let journalsCache = [];
+async function refreshJournals(){
+  const names = await listPlayers();
+  const all = [];
+  for(const n of names){
+    const p = await getPlayer(n);
+    if(!p) continue;
+    (p.log||[]).forEach(l=>{
+      if(l.journal){
+        all.push({ playerName: p.name, realName: p.realName||'', date: l.date, journal: l.journal });
+      }
+    });
+  }
+  all.sort((a,b)=> b.date.localeCompare(a.date));
+  journalsCache = all;
+  render();
+}
 
 /* ============ 畫面渲染 ============ */
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -2875,6 +2892,25 @@ function renderCoachRole(){
       </div>
       <div style="margin-top:12px;"><button class="btn gold" onclick="addGeoQuestion()">新增題目</button></div>
     </div>`;
+  } else if(state.coachTab==='journals'){
+    if(journalsCache.length===0 && state.players.length>0){ refreshJournals(); }
+    const entries = journalsCache.map(e=>{
+      const rows = journalFieldLabels().map(f=>{
+        const v = e.journal[f.key];
+        if(!v) return '';
+        return `<div style="margin-bottom:6px;"><span class="small-note" style="font-weight:600;">${esc(f.label)}：</span><span style="font-size:13px;">${esc(v)}</span></div>`;
+      }).join('');
+      return `<div class="panel" style="background:var(--bg-panel-2);margin-top:10px;">
+        <div class="small-note" style="margin-bottom:6px;">${esc(e.date)} ・ ${esc(e.playerName)}${e.realName?'（'+esc(e.realName)+'）':''}</div>
+        ${rows}
+      </div>`;
+    }).join('');
+    body = `
+    <div class="flex-between">
+      <div class="small-note">全隊所有學生填寫的訓練日誌內容，依日期新到舊排序，不用逐一點進每個球員查看。</div>
+      <button class="btn secondary small" onclick="journalsCache=[];refreshJournals();">重新整理</button>
+    </div>
+    ${entries || '<div class="empty" style="margin-top:14px;">目前還沒有任何學生填寫過訓練日誌</div>'}`;
   } else if(state.coachTab==='bonus'){
     let rows = (state.config.bonusTasks||[]).map(t=>`
       <tr><td>${esc(t.name)}</td><td>+${t.points}</td><td><button class="btn secondary small" onclick="deleteBonusTask('${t.id}')">刪除</button></td></tr>
@@ -3006,6 +3042,7 @@ function renderCoachRole(){
       <div class="tab ${state.coachTab==='skills'?'active':''}" onclick="setCoachTab('skills')">技能設定</div>
       <div class="tab ${state.coachTab==='classtiers'?'active':''}" onclick="setCoachTab('classtiers')">職業設定</div>
       <div class="tab ${state.coachTab==='geoquestions'?'active':''}" onclick="setCoachTab('geoquestions')">試煉之路題庫</div>
+      <div class="tab ${state.coachTab==='journals'?'active':''}" onclick="setCoachTab('journals')">訓練日誌總覽</div>
       <div class="tab ${state.coachTab==='bonus'?'active':''}" onclick="setCoachTab('bonus')">額外任務</div>
       <div class="tab ${state.coachTab==='questions'?'active':''}" onclick="setCoachTab('questions')">題庫管理</div>
       <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
@@ -3020,7 +3057,7 @@ function setRole(r){
   if(r==='coach'){ overviewCache=[]; }
   render();
 }
-function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } render(); }
+function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } render(); }
 
 function openCoachLogin(){
   state.showCoachLogin = true;
