@@ -295,7 +295,7 @@ function buildDefaultConfig(){
       ]},
       {id:'pitching', name:'投球練習', xp:10, points:5, required:false, requireVideo:false, subOptions:[]},
       {id:'training_log', name:'訓練日誌', xp:15, points:8, required:false, requireVideo:false, requireLogForm:true, subOptions:[]},
-      {id:'trial_path', name:'試煉之路', xp:12, points:6, required:false, requireVideo:false, requireLogForm:false, subOptions:[]}
+      {id:'trial_path', name:'試煉之路', xp:12, points:6, required:false, requireVideo:false, requireLogForm:false, requireGeoChallenge:true, subOptions:[]}
     ],
     questions:[
       {id:'q1', q:'打擊時，重心應該放在？', options:['前腳','後腳','雙腳平均','腳尖'], correct:2, tag:null, subTag:null},
@@ -329,44 +329,9 @@ function buildDefaultConfig(){
       {id:'score_q13', q:'記錄符號「PB」代表？', options:['投手犯規','捕手阻擋不住（捕逸）','打者出局','代打'], correct:1, tag:null, subTag:null},
       {id:'score_q14', q:'記錄「6-4-3」這種連續數字通常代表？', options:['全壘打路徑','雙殺打的傳球路線','打者的打擊順序','投手的用球數'], correct:1, tag:null, subTag:null},
       {id:'score_q15', q:'記錄符號「PH」代表？', options:['代跑','代打','指定打擊','先發打者'], correct:1, tag:null, subTag:null},
-      {id:'score_q16', q:'記錄符號「DH」代表？', options:['代打','代跑','指定打擊','守備調度'], correct:2, tag:null, subTag:null},
-      {id:'geo_q1', q:'中國的地勢由西向東呈現什麼樣的變化？', options:['逐漸升高','逐漸降低，呈三級階梯','忽高忽低','完全平坦'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q2', q:'中國山地和高原約占全國總面積的比例最接近？', options:['三成','四成','六成','八成'], correct:2, tag:'trial_path', subTag:null},
-      {id:'geo_q3', q:'中國西高東低的地勢，對主要河川的流向造成什麼影響？', options:['大多向西流','大多向東流','大多向北流','大多向南流'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q4', q:'中國冬季氣溫南暖北冷，主要受到什麼因素影響？', options:['緯度','經度','人口','產業'], correct:0, tag:'trial_path', subTag:null},
-      {id:'geo_q5', q:'中國東半部屬於哪一種氣候類型，年降水量大多超過500毫米？', options:['高地氣候','乾燥氣候','季風氣候','極地氣候'], correct:2, tag:'trial_path', subTag:null},
-      {id:'geo_q6', q:'中國各地年降水量大致呈現什麼樣的空間分布趨勢？', options:['由東南向西北遞減','由西北向東南遞減','由北向南遞減','全國均勻分布'], correct:0, tag:'trial_path', subTag:null},
-      {id:'geo_q7', q:'中國西部內陸因距海遙遠、地形阻隔，年、日溫差都很大，屬於哪一種氣候類型？', options:['季風氣候','乾燥氣候','高地氣候','熱帶氣候'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q8', q:'青藏高原因海拔高聳，氣候與植被隨高度垂直變化，屬於哪一種氣候類型？', options:['季風氣候','乾燥氣候','高地氣候','溫帶氣候'], correct:2, tag:'trial_path', subTag:null},
-      {id:'geo_q9', q:'中國面積最大的盆地，大部分被塔克拉瑪干沙漠所占據，是哪一個盆地？', options:['四川盆地','塔里木盆地','準噶爾盆地','柴達木盆地'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q10', q:'有「世界屋脊」之稱、也是世界最高的高原是？', options:['雲貴高原','黃土高原','內蒙古高原','青藏高原'], correct:3, tag:'trial_path', subTag:null},
-      {id:'geo_q11', q:'中國人數最多的民族約占全國人口的九成以上，是哪一個民族？', options:['壯族','漢族','回族','滿族'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q12', q:'中國人口分布最主要用哪兩個地點的連線，劃分出人口稠密與稀疏兩區？', options:['北京—上海','黑河—騰衝','長江—黃河','廣州—成都'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q13', q:'中國在1970年代提出哪一項政策，希望透過限制生育控制人口成長？', options:['西部大開發','一胎化政策','一帶一路','東北振興'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q14', q:'一胎化政策實施多年後，中國目前面臨的人口問題不包含下列何者？', options:['少子化','人口老化','性別比失衡','人口總數持續暴增'], correct:3, tag:'trial_path', subTag:null},
-      {id:'geo_q15', q:'近代中國東南沿海居民大量遷往東南亞與海外，最主要的原因是什麼？', options:['氣候嚴寒','山多田少、糧食不足','政府強制遷移','追求較低物價'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q16', q:'中國農業活動以哪兩個地標的連線為界，形成「南稻北麥」的分布？', options:['長江、黃河','秦嶺、淮河','太行山、黃河','天山、崑崙山'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q17', q:'中國西部游牧民族常利用哪一種動物適應乾燥少雨的沙漠環境，被稱為「沙漠之舟」？', options:['犛牛','駱駝','馬','羊'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q18', q:'青藏高原牧民利用哪一種動物馱運重物，被稱為「高原之舟」？', options:['駱駝','犛牛','驢','馬'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q19', q:'1980年代中國在東南沿海設立以出口為導向的工業區，稱為什麼？', options:['自由貿易港','經濟特區','保稅倉','加工出口區'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q20', q:'中國四大經濟區中，哪一區進出口貿易最興盛、經濟最發達？', options:['西部地區','中部地區','東部地區','東北地區'], correct:2, tag:'trial_path', subTag:null},
-      {id:'geo_q21', q:'中國政府為了縮小東西部的經濟差距，於2000年提出什麼政策？', options:['西部大開發','東北振興','一帶一路','一胎化政策'], correct:0, tag:'trial_path', subTag:null},
-      {id:'geo_q22', q:'北京近郊匯聚許多高科技研發部門，因此有「中國矽谷」之稱的地方是？', options:['浦東新區','中關村','深圳特區','珠江三角洲'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q23', q:'日本列島由北海道、本州、四國與哪一個大島組成？', options:['沖繩島','九州','對馬島','濟州島'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q24', q:'朝鮮半島北邊與中國哪一座山脈接壤？', options:['崑崙山','長白山','太行山','秦嶺'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q25', q:'日本因為位處板塊交界帶，因此經常發生哪些自然現象？', options:['沙塵暴與乾旱','地震與火山','颶風與龍捲風','洪水與土石流'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q26', q:'朝鮮半島地勢最高、被稱為半島最高處的高原是？', options:['太白高原','蓋馬高原','內蒙古高原','青藏高原'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q27', q:'東北亞地區夏季主要吹哪個方向的季風，帶來大量水氣？', options:['西北季風','東南季風','西南季風','東北季風'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q28', q:'日本因山多平原少，農業經營以哪一種方式為主？', options:['粗放耕作','集約耕作','游牧','山牧季移'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q29', q:'日本的經濟骨幹，也是其工業實力的代表產業是？', options:['石化工業','汽車工業','紡織工業','造紙工業'], correct:1, tag:'trial_path', subTag:null},
-      {id:'geo_q30', q:'南韓近年推動文化產業發展，積極向世界推廣「韓流」的政策稱為什麼？', options:['文化立國','一帶一路','西部大開發','東北振興'], correct:0, tag:'trial_path', subTag:null},
-      {id:'geo_q31', q:'南、北韓之間唯一的接觸點、被設為共同警備區的地方是？', options:['首爾','板門店','平壤','釜山'], correct:1, tag:'trial_path', subTag:null}
-    ],
-    bonusTasks:[
-      {id:'book', name:'熟讀一本課外書', points:15}
+      {id:'score_q16', q:'記錄符號「DH」代表？', options:['代打','代跑','指定打擊','守備調度'], correct:2, tag:null, subTag:null}
     ],
     shopItems:[
-      {id:'fitness_skip1', name:'體能減一趟卡', cost:15, desc:'體能訓練可以少做一趟內容', advanceNotice:false},
       {id:'fitness_off_today', name:'當日體能躺平卡', cost:30, desc:'今天的體能訓練可以完全不用做', advanceNotice:false},
       {id:'drink', name:'飲料卡（不指定）', cost:20, desc:'兌換一杯飲料，口味由教練決定', advanceNotice:false},
       {id:'batting_glove', name:'打擊手套（一隻）', cost:150, desc:'兌換打擊手套一隻', advanceNotice:false},
@@ -428,7 +393,40 @@ function buildDefaultConfig(){
         {level:30, title:'大祭司', desc:'祝禱大成，點數加成提升並帶來一絲敏捷', bonusDamage:0, dodgeReduction:0.06, bonusPoints:9}
       ]
     },
-    starterCharacterIds: STARTER_CHARACTER_IDS.slice()
+    starterCharacterIds: STARTER_CHARACTER_IDS.slice(),
+    geoQuestions: [
+      {id:'geo_q1', q:'中國的地勢由西向東呈現什麼樣的變化？', options:['逐漸升高','逐漸降低，呈三級階梯','忽高忽低','完全平坦'], correct:1},
+      {id:'geo_q2', q:'中國山地和高原約占全國總面積的比例最接近？', options:['三成','四成','六成','八成'], correct:2},
+      {id:'geo_q3', q:'中國西高東低的地勢，對主要河川的流向造成什麼影響？', options:['大多向西流','大多向東流','大多向北流','大多向南流'], correct:1},
+      {id:'geo_q4', q:'中國冬季氣溫南暖北冷，主要受到什麼因素影響？', options:['緯度','經度','人口','產業'], correct:0},
+      {id:'geo_q5', q:'中國東半部屬於哪一種氣候類型，年降水量大多超過500毫米？', options:['高地氣候','乾燥氣候','季風氣候','極地氣候'], correct:2},
+      {id:'geo_q6', q:'中國各地年降水量大致呈現什麼樣的空間分布趨勢？', options:['由東南向西北遞減','由西北向東南遞減','由北向南遞減','全國均勻分布'], correct:0},
+      {id:'geo_q7', q:'中國西部內陸因距海遙遠、地形阻隔，年、日溫差都很大，屬於哪一種氣候類型？', options:['季風氣候','乾燥氣候','高地氣候','熱帶氣候'], correct:1},
+      {id:'geo_q8', q:'青藏高原因海拔高聳，氣候與植被隨高度垂直變化，屬於哪一種氣候類型？', options:['季風氣候','乾燥氣候','高地氣候','溫帶氣候'], correct:2},
+      {id:'geo_q9', q:'中國面積最大的盆地，大部分被塔克拉瑪干沙漠所占據，是哪一個盆地？', options:['四川盆地','塔里木盆地','準噶爾盆地','柴達木盆地'], correct:1},
+      {id:'geo_q10', q:'有「世界屋脊」之稱、也是世界最高的高原是？', options:['雲貴高原','黃土高原','內蒙古高原','青藏高原'], correct:3},
+      {id:'geo_q11', q:'中國人數最多的民族約占全國人口的九成以上，是哪一個民族？', options:['壯族','漢族','回族','滿族'], correct:1},
+      {id:'geo_q12', q:'中國人口分布最主要用哪兩個地點的連線，劃分出人口稠密與稀疏兩區？', options:['北京—上海','黑河—騰衝','長江—黃河','廣州—成都'], correct:1},
+      {id:'geo_q13', q:'中國在1970年代提出哪一項政策，希望透過限制生育控制人口成長？', options:['西部大開發','一胎化政策','一帶一路','東北振興'], correct:1},
+      {id:'geo_q14', q:'一胎化政策實施多年後，中國目前面臨的人口問題不包含下列何者？', options:['少子化','人口老化','性別比失衡','人口總數持續暴增'], correct:3},
+      {id:'geo_q15', q:'近代中國東南沿海居民大量遷往東南亞與海外，最主要的原因是什麼？', options:['氣候嚴寒','山多田少、糧食不足','政府強制遷移','追求較低物價'], correct:1},
+      {id:'geo_q16', q:'中國農業活動以哪兩個地標的連線為界，形成「南稻北麥」的分布？', options:['長江、黃河','秦嶺、淮河','太行山、黃河','天山、崑崙山'], correct:1},
+      {id:'geo_q17', q:'中國西部游牧民族常利用哪一種動物適應乾燥少雨的沙漠環境，被稱為「沙漠之舟」？', options:['犛牛','駱駝','馬','羊'], correct:1},
+      {id:'geo_q18', q:'青藏高原牧民利用哪一種動物馱運重物，被稱為「高原之舟」？', options:['駱駝','犛牛','驢','馬'], correct:1},
+      {id:'geo_q19', q:'1980年代中國在東南沿海設立以出口為導向的工業區，稱為什麼？', options:['自由貿易港','經濟特區','保稅倉','加工出口區'], correct:1},
+      {id:'geo_q20', q:'中國四大經濟區中，哪一區進出口貿易最興盛、經濟最發達？', options:['西部地區','中部地區','東部地區','東北地區'], correct:2},
+      {id:'geo_q21', q:'中國政府為了縮小東西部的經濟差距，於2000年提出什麼政策？', options:['西部大開發','東北振興','一帶一路','一胎化政策'], correct:0},
+      {id:'geo_q22', q:'北京近郊匯聚許多高科技研發部門，因此有「中國矽谷」之稱的地方是？', options:['浦東新區','中關村','深圳特區','珠江三角洲'], correct:1},
+      {id:'geo_q23', q:'日本列島由北海道、本州、四國與哪一個大島組成？', options:['沖繩島','九州','對馬島','濟州島'], correct:1},
+      {id:'geo_q24', q:'朝鮮半島北邊與中國哪一座山脈接壤？', options:['崑崙山','長白山','太行山','秦嶺'], correct:1},
+      {id:'geo_q25', q:'日本因為位處板塊交界帶，因此經常發生哪些自然現象？', options:['沙塵暴與乾旱','地震與火山','颶風與龍捲風','洪水與土石流'], correct:1},
+      {id:'geo_q26', q:'朝鮮半島地勢最高、被稱為半島最高處的高原是？', options:['太白高原','蓋馬高原','內蒙古高原','青藏高原'], correct:1},
+      {id:'geo_q27', q:'東北亞地區夏季主要吹哪個方向的季風，帶來大量水氣？', options:['西北季風','東南季風','西南季風','東北季風'], correct:1},
+      {id:'geo_q28', q:'日本因山多平原少，農業經營以哪一種方式為主？', options:['粗放耕作','集約耕作','游牧','山牧季移'], correct:1},
+      {id:'geo_q29', q:'日本的經濟骨幹，也是其工業實力的代表產業是？', options:['石化工業','汽車工業','紡織工業','造紙工業'], correct:1},
+      {id:'geo_q30', q:'南韓近年推動文化產業發展，積極向世界推廣「韓流」的政策稱為什麼？', options:['文化立國','一帶一路','西部大開發','東北振興'], correct:0},
+      {id:'geo_q31', q:'南、北韓之間唯一的接觸點、被設為共同警備區的地方是？', options:['首爾','板門店','平壤','釜山'], correct:1}
+    ]
   };
 }
 async function getConfig(){
@@ -470,8 +468,25 @@ async function getConfig(){
         it.requireVideo = false;
         it.requireLogForm = true;
       }
+      if(it.requireGeoChallenge==null) it.requireGeoChallenge = false;
+      if(it.id==='trial_path' && !it.requireGeoChallenge){
+        it.requireGeoChallenge = true;
+      }
     });
     (parsed.questions||[]).forEach(q=>{ if(q.subTag===undefined) q.subTag = null; });
+    // 地理題庫獨立管理，不跟主題庫混在一起；若舊資料裡還留有 geo_ 開頭的題目，搬移到獨立題庫
+    if(!parsed.geoQuestions) parsed.geoQuestions = [];
+    const strayGeoQuestions = (parsed.questions||[]).filter(q=>q.id.startsWith('geo_'));
+    if(strayGeoQuestions.length){
+      const existingIds = new Set(parsed.geoQuestions.map(q=>q.id));
+      strayGeoQuestions.forEach(q=>{
+        if(!existingIds.has(q.id)) parsed.geoQuestions.push({id:q.id, q:q.q, options:q.options, correct:q.correct});
+      });
+      parsed.questions = (parsed.questions||[]).filter(q=>!q.id.startsWith('geo_'));
+    }
+    if(!parsed.geoQuestions.length){
+      parsed.geoQuestions = buildDefaultConfig().geoQuestions;
+    }
     return parsed;
   }catch(e){
     const def = buildDefaultConfig();
@@ -515,7 +530,23 @@ async function importTrialPathItem(){
   showToast('已新增「試煉之路」項目！');
   render();
 }
-async function importGeographyQuestions(){ return importQuestionsByPrefix('geo_', '地理'); }
+async function addGeoQuestion(){
+  const d = state.addGeoQuestionDraft;
+  if(!d.q.trim()){ showToast('請輸入題目內容'); return; }
+  const opts = [d.opt0,d.opt1,d.opt2,d.opt3].map(o=>(o||'').trim());
+  if(opts.some(o=>!o)){ showToast('請完整填寫四個選項'); return; }
+  const id = 'geo_'+Date.now();
+  state.config.geoQuestions.push({id, q:d.q.trim(), options:opts, correct:Number(d.correct)||0});
+  await saveConfig(state.config);
+  state.addGeoQuestionDraft = {q:'', opt0:'', opt1:'', opt2:'', opt3:'', correct:0};
+  showToast('已新增試煉之路題目');
+  render();
+}
+async function deleteGeoQuestion(id){
+  state.config.geoQuestions = (state.config.geoQuestions||[]).filter(q=>q.id!==id);
+  await saveConfig(state.config);
+  render();
+}
 async function saveConfig(cfg){
   await dbSet('config', JSON.stringify(cfg));
 }
@@ -990,6 +1021,9 @@ let state = {
   showSkillDetail: null,
   viewingJournalIndex: null,
   showJournalForm: null,
+  showGeoChallenge: null,
+  geoChallengeQ: null,
+  geoChallengeSelected: null,
   journalFormDraft: {},
   tutorialStep: 0,
   playerChips: [],
@@ -1014,7 +1048,8 @@ let state = {
   addBossDraft: {name:'', emoji:'', quote:''},
   addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'},
   skillStageDraft: {},
-  classTierDraft: {}
+  classTierDraft: {},
+  addGeoQuestionDraft: {q:'', opt0:'', opt1:'', opt2:'', opt3:'', correct:0}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -1170,9 +1205,51 @@ function toggleItem(id){
       render();
       return;
     }
+    if(it && it.requireGeoChallenge){
+      openGeoChallenge(id);
+      return;
+    }
   }
   checklistDraft[id] = !checklistDraft[id];
   if(!checklistDraft[id]){ delete subDraft[id]; delete journalDraft[id]; }
+  render();
+}
+function openGeoChallenge(itemId){
+  const qs = state.config.geoQuestions || [];
+  if(!qs.length){ showToast('教練還沒有新增試煉之路的題目喔'); return; }
+  state.showGeoChallenge = itemId;
+  state.geoChallengeQ = qs[Math.floor(Math.random()*qs.length)];
+  state.geoChallengeSelected = null;
+  render();
+}
+function answerGeoChallenge(idx){
+  if(state.geoChallengeSelected!==null) return;
+  const q = state.geoChallengeQ;
+  const correct = idx===q.correct;
+  state.geoChallengeSelected = idx;
+  render();
+  setTimeout(()=>{
+    if(correct){
+      const itemId = state.showGeoChallenge;
+      checklistDraft[itemId] = true;
+      state.showGeoChallenge = null;
+      state.geoChallengeQ = null;
+      state.geoChallengeSelected = null;
+      showToast('🗺️ 答對了！試煉之路通過！');
+      render();
+    } else {
+      const qs = state.config.geoQuestions || [];
+      state.geoChallengeQ = qs[Math.floor(Math.random()*qs.length)];
+      state.geoChallengeSelected = null;
+      showToast('答錯了，再試一題！');
+      render();
+    }
+  }, 1400);
+}
+function closeGeoChallenge(){
+  state.showGeoChallenge = null;
+  state.geoChallengeQ = null;
+  state.geoChallengeSelected = null;
   render();
 }
 function submitJournalForm(){
@@ -1799,6 +1876,32 @@ function renderCoachLoginModal(){
   </div>`;
 }
 
+function renderGeoChallengeModal(){
+  const q = state.geoChallengeQ;
+  const sel = state.geoChallengeSelected;
+  if(!q) return '';
+  const opts = q.options.map((o,i)=>{
+    let cls = 'opt-btn';
+    if(sel!==null){
+      if(i===q.correct) cls += ' correct';
+      else if(i===sel) cls += ' wrong';
+    }
+    return `<button class="${cls}" ${sel!==null?'disabled':''} onclick="answerGeoChallenge(${i})">${esc(o)}</button>`;
+  }).join('');
+  return `
+  <div class="modal-bg" onclick="if(event.target===this && ${sel===null}) closeGeoChallenge()">
+    <div class="modal" style="max-width:420px;">
+      <div class="flex-between" style="align-items:flex-start;">
+        <h3 style="margin:0;">🗺️ 試煉之路</h3>
+        ${sel===null?'<button class="btn secondary small" onclick="closeGeoChallenge()">✕</button>':''}
+      </div>
+      <div class="small-note" style="margin:8px 0 14px;">答對一題就能完成試煉，答錯可以再試一題！</div>
+      <p style="font-size:16px;line-height:1.6;">${esc(q.q)}</p>
+      ${opts}
+    </div>
+  </div>`;
+}
+
 function renderJournalFormModal(){
   const d = state.journalFormDraft || {};
   const scaleOptions = (val)=>[1,2,3,4,5].map(n=>`<option value="${n}" ${val==n?'selected':''}>${n}</option>`).join('');
@@ -2196,7 +2299,7 @@ function renderPlayerRole(){
     const alreadyDone = doneToday.has(it.name);
     const checked = !!checklistDraft[it.id];
     const hasSubOptions = it.subOptions && it.subOptions.length>0;
-    const badges = (it.required?' <span style="color:var(--accent-light);">⭐每日任務</span>':'') + (it.requireVideo?' <span style="color:var(--accent-red);">📎需上傳證明</span>':'') + (it.requireLogForm?' <span style="color:var(--accent-light);">📖需線上填寫</span>':'') + (alreadyDone?' <span style="color:var(--accent-green);">✅ 今天已完成</span>':'');
+    const badges = (it.required?' <span style="color:var(--accent-light);">⭐每日任務</span>':'') + (it.requireVideo?' <span style="color:var(--accent-red);">📎需上傳證明</span>':'') + (it.requireLogForm?' <span style="color:var(--accent-light);">📖需線上填寫</span>':'') + (it.requireGeoChallenge?' <span style="color:var(--accent-light);">🗺️需通過試煉</span>':'') + (alreadyDone?' <span style="color:var(--accent-green);">✅ 今天已完成</span>':'');
     let subHtml = '';
     if(!alreadyDone && checked && hasSubOptions){
       const d = subDraft[it.id] || {picks:{}, custom:''};
@@ -2318,6 +2421,7 @@ function renderPlayerRole(){
   </div>
   ${state.showAvatarPicker ? renderAvatarPickerModal() : ''}
   ${state.showJournalForm ? renderJournalFormModal() : ''}
+  ${state.showGeoChallenge ? renderGeoChallengeModal() : ''}
   ${state.showTutorial ? renderTutorialModal() : ''}
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;align-items:start;">
@@ -2742,6 +2846,35 @@ function renderCoachRole(){
     body = `
     <div class="small-note" style="margin-bottom:10px;">每個角色可以設定「轉職」階級——球員選了這個角色、等級到了，會自動變成該階級的稱號與被動加成（跟技能一樣是直接變成新階級，不會疊加同角色自己的舊階級）。勾選「開放為新手可選角色」可以讓這個角色出現在球員建立/更換角色的選單裡。</div>
     ${sections}`;
+  } else if(state.coachTab==='geoquestions'){
+    const gq = state.config.geoQuestions || [];
+    let rows = gq.map(q=>`<tr><td>${esc(q.q)}</td><td>${esc(q.options[q.correct])}</td><td><button class="btn secondary small" onclick="deleteGeoQuestion('${q.id}')">刪除</button></td></tr>`).join('');
+    const d = state.addGeoQuestionDraft;
+    body = `
+    <div class="small-note" style="margin-bottom:10px;">這是「試煉之路」項目專屬的獨立題庫，完全跟棒球題庫、Boss 戰鬥分開——學生勾選試煉之路時，會直接從這裡隨機抽一題作答，答對才算完成，不會出現在 Boss 攻擊的題目池裡。</div>
+    <table><thead><tr><th>題目</th><th>正解</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=3 class="empty">尚無題目</td></tr>'}</tbody></table>
+    <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
+      <h2 style="font-size:16px;">新增試煉之路題目</h2>
+      <div style="margin-top:6px;">
+        <label>題目內容</label>
+        <input type="text" value="${esc(d.q)}" oninput="state.addGeoQuestionDraft.q=this.value" placeholder="例如：中國面積最大的盆地是？">
+      </div>
+      <div class="row-flex" style="margin-top:10px;">
+        <div><label>選項一</label><input type="text" value="${esc(d.opt0)}" oninput="state.addGeoQuestionDraft.opt0=this.value"></div>
+        <div><label>選項二</label><input type="text" value="${esc(d.opt1)}" oninput="state.addGeoQuestionDraft.opt1=this.value"></div>
+      </div>
+      <div class="row-flex" style="margin-top:10px;">
+        <div><label>選項三</label><input type="text" value="${esc(d.opt2)}" oninput="state.addGeoQuestionDraft.opt2=this.value"></div>
+        <div><label>選項四</label><input type="text" value="${esc(d.opt3)}" oninput="state.addGeoQuestionDraft.opt3=this.value"></div>
+      </div>
+      <div style="margin-top:10px;">
+        <label>正確答案（選擇左側圓點標記正確選項）</label>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:4px;">
+          ${[0,1,2,3].map(i=>`<label style="display:flex;align-items:center;gap:6px;color:var(--text-chalk);"><input type="radio" name="geoCorrect" style="width:auto;" ${Number(d.correct)===i?'checked':''} onchange="state.addGeoQuestionDraft.correct=${i}">選項${i+1}</label>`).join('')}
+        </div>
+      </div>
+      <div style="margin-top:12px;"><button class="btn gold" onclick="addGeoQuestion()">新增題目</button></div>
+    </div>`;
   } else if(state.coachTab==='bonus'){
     let rows = (state.config.bonusTasks||[]).map(t=>`
       <tr><td>${esc(t.name)}</td><td>+${t.points}</td><td><button class="btn secondary small" onclick="deleteBonusTask('${t.id}')">刪除</button></td></tr>
@@ -2786,10 +2919,7 @@ function renderCoachRole(){
       <div class="small-note" style="margin-bottom:8px;">依照你提供的「記錄符號表」整理出的 16 題選擇題（守備位置代號、記錄符號 BB/HR/SB/FC 等），可以直接匯入題庫，不會動到你原本的項目或其他題目。</div>
       <button class="btn secondary" onclick="importScorekeepingQuestions()">📥 匯入棒球記錄符號選擇題（16題）</button>
     </div>
-    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
-      <div class="small-note" style="margin-bottom:8px;">依照你提供的國中地理講義（中國自然環境、人口、產業、東北亞）整理出的 31 題選擇題，會標記對應「試煉之路」項目，學生完成試煉之路當天答題會優先抽到這些題目。可以直接匯入題庫，不會動到你原本的項目或其他題目。</div>
-      <button class="btn secondary" onclick="importGeographyQuestions()">📥 匯入地理科選擇題（31題）</button>
-    </div>
+    <div class="small-note" style="margin-bottom:14px;">📌 地理科題目已經獨立成「試煉之路」自己的題庫，不會出現在這裡，也不會混進 Boss 戰鬥的題目池。請到「試煉之路題庫」分頁管理。</div>
     <table><thead><tr><th>題目</th><th>正解</th><th>對應項目</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=4 class="empty">尚無題目</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
       <label>題目內容</label>
@@ -2875,6 +3005,7 @@ function renderCoachRole(){
       <div class="tab ${state.coachTab==='bossroster'?'active':''}" onclick="setCoachTab('bossroster')">Boss 設定</div>
       <div class="tab ${state.coachTab==='skills'?'active':''}" onclick="setCoachTab('skills')">技能設定</div>
       <div class="tab ${state.coachTab==='classtiers'?'active':''}" onclick="setCoachTab('classtiers')">職業設定</div>
+      <div class="tab ${state.coachTab==='geoquestions'?'active':''}" onclick="setCoachTab('geoquestions')">試煉之路題庫</div>
       <div class="tab ${state.coachTab==='bonus'?'active':''}" onclick="setCoachTab('bonus')">額外任務</div>
       <div class="tab ${state.coachTab==='questions'?'active':''}" onclick="setCoachTab('questions')">題庫管理</div>
       <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
