@@ -2262,45 +2262,16 @@ function renderPlayerRole(){
     </div>`).join('') || '<div class="empty">物品欄是空的，去商店兌換點東西吧！</div>';
 
   return `
-  <div class="panel">
-    <div class="flex-between">
-      <h2 style="margin:0;"><span class="eyebrow">Player</span>${esc(p.name)} 的競技場</h2>
+  <div class="panel" style="background:linear-gradient(135deg, rgba(255,209,102,0.14), rgba(228,87,46,0.08)); border-color:var(--accent-light);">
+    <div class="flex-between" style="margin-bottom:6px;">
+      <div style="font-family:var(--font-display);font-size:15px;color:var(--accent-light);letter-spacing:0.5px;">🧭 現在該做什麼？</div>
       <div style="display:flex;gap:8px;">
-        <button class="btn gold" style="font-size:14px;padding:10px 16px;" onclick="openTutorial()">❓ 教學</button>
+        <button class="btn gold" style="font-size:13px;padding:8px 12px;" onclick="openTutorial()">❓ 教學</button>
         <button class="btn secondary small" onclick="backToPicker()">切換球員</button>
       </div>
     </div>
-    <div style="display:flex;gap:12px;align-items:center;margin-top:10px;">
-      <img src="${myChar.image}" style="width:64px;height:64px;image-rendering:pixelated;border-radius:12px;border:2px solid var(--line);background:var(--bg-panel-2);">
-      <div>
-        <div style="font-family:var(--font-display);font-size:20px;color:var(--accent-light);">${esc(myTierTitle)}</div>
-        ${myTier && myTier.desc ? `<div class="small-note">${esc(myTier.desc)}</div>` : ''}
-        ${myNextTier ? `<div class="small-note" style="color:var(--accent-light);">⬆ Lv.${myNextTier.level} 轉職：${esc(myNextTier.title)}</div>` : ''}
-      </div>
-    </div>
-    <div class="small-note" style="margin-top:8px;">🪪 暱稱／ID：${esc(p.name)} ・ 本名：${esc(p.realName||'未填寫')}</div>
-    <div class="stat-row">
-      <div class="stat-card"><div class="v">Lv.${p.level}${p.level>=MAX_LEVEL?'（滿）':''}</div><div class="l">等級</div></div>
-      <div class="stat-card"><div class="v">⚡${p.energy}</div><div class="l">能量</div></div>
-      <div class="stat-card"><div class="v">💰${p.points}</div><div class="l">兌換點數</div></div>
-      <div class="stat-card"><div class="v">${p.streak}🔥</div><div class="l">連續天數</div></div>
-    </div>
-    <div style="margin-top:10px;">
-      <div class="small-note" style="display:flex;justify-content:space-between;">
-        <span>經驗值 EXP</span>
-        <span>${p.level>=MAX_LEVEL ? '已達最高等級 🌟' : (expIntoLevel+' / '+EXP_PER_LEVEL+'（差 '+(EXP_PER_LEVEL-expIntoLevel)+' 就升級）')}</span>
-      </div>
-      <div class="hp-bar-outer" style="height:10px;"><div class="hp-bar-inner" style="width:${expPct}%;background:linear-gradient(90deg,var(--accent-green),#5fd1c4);"></div></div>
-    </div>
-  </div>
-
-  <div class="panel" style="background:linear-gradient(135deg, rgba(255,209,102,0.14), rgba(228,87,46,0.08)); border-color:var(--accent-light);">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div style="font-size:26px;">🧭</div>
-      <div style="flex:1;min-width:180px;">
-        <div style="font-family:var(--font-display);font-size:15px;color:var(--accent-light);letter-spacing:0.5px;">現在該做什麼？</div>
-        <div style="font-size:13px;color:var(--text-chalk);margin-top:2px;">${esc(questHint.text)}</div>
-      </div>
+      <div style="flex:1;min-width:180px;font-size:13px;color:var(--text-chalk);">${esc(questHint.text)}</div>
       ${questHint.action ? `<button class="btn gold small" onclick="${questHint.action}">${esc(questHint.cta)} →</button>` : ''}
     </div>
   </div>
@@ -2308,63 +2279,82 @@ function renderPlayerRole(){
   ${state.showJournalForm ? renderJournalFormModal() : ''}
   ${state.showTutorial ? renderTutorialModal() : ''}
 
-  <div class="panel">
-    <h2><span class="eyebrow">Inventory</span>🎒 我的物品欄</h2>
-    <div class="item-list">${inventoryRows}</div>
-    <div class="small-note" style="margin-top:8px;">物品的「使用」狀態需要教練在後台確認，不能自己標記喔——去跟教練當面兌換（例如拿手套、請假）之後，請教練幫你確認。</div>
-  </div>
-
-  <div class="panel battle-card" id="battle-panel" style="cursor:pointer;padding:16px;" onclick="state.showBattleModal=true;render();">
-    <div style="display:flex;align-items:center;gap:14px;">
-      <div style="position:relative;flex-shrink:0;">
-        ${monsterVisualHtml(boss, 'boss-emoji-small')}
-        ${(p.ultimateGauge||0)>=100 ? '<div style="position:absolute;top:-4px;right:-4px;font-size:16px;">💥</div>' : ''}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;align-items:start;">
+    <div class="panel" style="margin-top:0;padding:14px;">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <img src="${myChar.image}" style="width:44px;height:44px;image-rendering:pixelated;border-radius:10px;border:2px solid var(--line);background:var(--bg-panel-2);flex-shrink:0;">
+        <div style="min-width:0;">
+          <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);">${esc(myTierTitle)}</div>
+          <div class="small-note" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.name)}（${esc(p.realName||'未填')}）</div>
+        </div>
       </div>
-      <div style="flex:1;text-align:left;min-width:0;">
-        <div class="monster-name" style="font-size:16px;">${esc(boss.name)}</div>
-        <div class="hp-bar-outer" style="height:8px;margin:4px 0;"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
-        <div class="small-note">⚡${p.energy} 可攻擊 ${Math.floor(p.energy/(attackCost||1))} 次 ・ 點我進入戰鬥 →</div>
+      <div class="stat-row" style="margin-top:10px;gap:6px;">
+        <div class="stat-card" style="padding:8px;min-width:0;"><div class="v" style="font-size:20px;">Lv.${p.level}${p.level>=MAX_LEVEL?'滿':''}</div><div class="l">等級</div></div>
+        <div class="stat-card" style="padding:8px;min-width:0;"><div class="v" style="font-size:20px;">⚡${p.energy}</div><div class="l">能量</div></div>
+        <div class="stat-card" style="padding:8px;min-width:0;"><div class="v" style="font-size:20px;">💰${p.points}</div><div class="l">點數</div></div>
+        <div class="stat-card" style="padding:8px;min-width:0;"><div class="v" style="font-size:20px;">${p.streak}🔥</div><div class="l">連續</div></div>
       </div>
-    </div>
-  </div>
-  ${state.showBattleModal ? renderBattleModal() : ''}
-
-  <div class="panel">
-    <h2><span class="eyebrow">Skills</span>🧠 我的技能</h2>
-    <div class="small-note" style="margin-bottom:10px;">職業被動永久生效；技能會隨等級自動解鎖，點格子看詳細內容。主動技能要花點數啟動，啟動後下一次攻擊才會發動。</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">${classPassiveTile}${skillTiles}</div>
-  </div>
-  ${state.showSkillDetail ? renderSkillDetailModal() : ''}
-
-  <div class="panel battle-card" id="path-panel" style="cursor:pointer;padding:16px;" onclick="state.showPathModal=true;render();">
-    <div style="display:flex;align-items:center;gap:14px;">
-      <div style="font-size:40px;flex-shrink:0;">📋</div>
-      <div style="flex:1;text-align:left;min-width:0;">
-        <div class="monster-name" style="font-size:16px;">修練之路</div>
-        <div class="hp-bar-outer" style="height:8px;margin:4px 0;"><div class="hp-bar-inner" style="width:${state.config.items.length?Math.round(doneToday.size/state.config.items.length*100):0}%;background:linear-gradient(90deg,var(--accent-green),#5fd1c4);"></div></div>
-        <div class="small-note">${doneToday.size} / ${state.config.items.length} 項目已完成 ・ 點我進入修練 →</div>
+      <div style="margin-top:8px;">
+        <div class="small-note" style="display:flex;justify-content:space-between;">
+          <span>EXP</span>
+          <span>${p.level>=MAX_LEVEL ? '滿級 🌟' : (expIntoLevel+'/'+EXP_PER_LEVEL)}</span>
+        </div>
+        <div class="hp-bar-outer" style="height:8px;"><div class="hp-bar-inner" style="width:${expPct}%;background:linear-gradient(90deg,var(--accent-green),#5fd1c4);"></div></div>
       </div>
     </div>
-  </div>
-  ${state.showPathModal ? renderPathModal(itemRows, logRows, allDoneToday) : ''}
 
-  <div class="panel">
-    <h2><span class="eyebrow">Bonus</span>額外任務</h2>
+    <div class="panel" style="margin-top:0;padding:14px;">
+      <h2 style="font-size:16px;"><span class="eyebrow">Inventory</span>🎒 物品欄</h2>
+      <div class="item-list">${inventoryRows}</div>
+      <div class="small-note" style="margin-top:6px;">使用狀態需教練確認，不能自己標記喔。</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;align-items:start;">
+    <div class="panel" style="margin-top:0;padding:14px;">
+      <h2 style="font-size:16px;"><span class="eyebrow">Skills</span>🧠 技能</h2>
+      <div class="small-note" style="margin-bottom:8px;">點格子看詳細內容。</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">${classPassiveTile}${skillTiles}</div>
+    </div>
+    ${state.showSkillDetail ? renderSkillDetailModal() : ''}
+
+    <div class="panel battle-card" id="shop-panel" style="cursor:pointer;padding:14px;margin-top:0;" onclick="state.showShopModal=true;render();">
+      <div style="font-size:34px;">🏪</div>
+      <div class="monster-name" style="font-size:16px;">福利社</div>
+      <div class="small-note">💰 ${p.points} 點 ・ 點我逛逛 →</div>
+    </div>
+    ${state.showShopModal ? renderShopModal(shopRows) : ''}
+  </div>
+
+  <div class="panel" style="margin-top:14px;">
+    <div class="panel battle-card" id="path-panel" style="cursor:pointer;padding:16px;margin-top:0;" onclick="state.showPathModal=true;render();">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="font-size:40px;flex-shrink:0;">📋</div>
+        <div style="flex:1;text-align:left;min-width:0;">
+          <div class="monster-name" style="font-size:16px;">修練之路</div>
+          <div class="hp-bar-outer" style="height:8px;margin:4px 0;"><div class="hp-bar-inner" style="width:${state.config.items.length?Math.round(doneToday.size/state.config.items.length*100):0}%;background:linear-gradient(90deg,var(--accent-green),#5fd1c4);"></div></div>
+          <div class="small-note">${doneToday.size} / ${state.config.items.length} 項目已完成 ・ 點我進入修練 →</div>
+        </div>
+      </div>
+    </div>
+    ${state.showPathModal ? renderPathModal(itemRows, logRows, allDoneToday) : ''}
+    <h2 style="margin-top:16px;font-size:16px;"><span class="eyebrow">Bonus</span>額外任務</h2>
     <div class="small-note" style="margin-bottom:8px;">完成後直接回報，不限次數，也不影響每日練習紀錄。</div>
     <div class="item-list">${bonusRows}</div>
     ${bonusHistory ? `<h2 style="margin-top:16px;font-size:16px;">最近回報</h2>${bonusHistory}` : ''}
   </div>
 
-  <div class="panel battle-card" id="shop-panel" style="cursor:pointer;padding:16px;" onclick="state.showShopModal=true;render();">
-    <div style="display:flex;align-items:center;gap:14px;">
-      <div style="font-size:40px;flex-shrink:0;">🏪</div>
-      <div style="flex:1;text-align:left;min-width:0;">
-        <div class="monster-name" style="font-size:16px;">福利社</div>
-        <div class="small-note">💰 ${p.points} 點可以用 ・ 點我逛福利社 →</div>
-      </div>
+  <div class="panel battle-card" id="battle-panel" style="padding:16px;margin-top:14px;">
+    <div style="position:relative;display:inline-block;">
+      ${monsterVisualHtml(boss, 'boss-emoji-small')}
+      ${(p.ultimateGauge||0)>=100 ? '<div style="position:absolute;top:-4px;right:-4px;font-size:16px;">💥</div>' : ''}
     </div>
+    <div class="monster-name" style="font-size:18px;">${esc(boss.name)}</div>
+    <div class="hp-bar-outer" style="height:10px;margin:6px auto;max-width:300px;"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
+    <div class="small-note">⚡${p.energy} 可攻擊 ${Math.floor(p.energy/(attackCost||1))} 次</div>
+    <button class="btn gold" style="width:100%;margin-top:14px;font-size:16px;padding:14px;" onclick="state.showBattleModal=true;render();">⚔️ 戰鬥去</button>
   </div>
-  ${state.showShopModal ? renderShopModal(shopRows) : ''}`;
+  ${state.showBattleModal ? renderBattleModal() : ''}`;
 }
 
 function renderPathModal(itemRows, logRows, allDoneToday){
