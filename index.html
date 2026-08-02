@@ -294,7 +294,8 @@ function buildDefaultConfig(){
         {label:'自訂內容', xp:1, points:1}
       ]},
       {id:'pitching', name:'投球練習', xp:10, points:5, required:false, requireVideo:false, subOptions:[]},
-      {id:'training_log', name:'訓練日誌', xp:15, points:8, required:false, requireVideo:false, requireLogForm:true, subOptions:[]}
+      {id:'training_log', name:'訓練日誌', xp:15, points:8, required:false, requireVideo:false, requireLogForm:true, subOptions:[]},
+      {id:'trial_path', name:'試煉之路', xp:12, points:6, required:false, requireVideo:false, requireLogForm:false, subOptions:[]}
     ],
     questions:[
       {id:'q1', q:'打擊時，重心應該放在？', options:['前腳','後腳','雙腳平均','腳尖'], correct:2, tag:null, subTag:null},
@@ -328,7 +329,38 @@ function buildDefaultConfig(){
       {id:'score_q13', q:'記錄符號「PB」代表？', options:['投手犯規','捕手阻擋不住（捕逸）','打者出局','代打'], correct:1, tag:null, subTag:null},
       {id:'score_q14', q:'記錄「6-4-3」這種連續數字通常代表？', options:['全壘打路徑','雙殺打的傳球路線','打者的打擊順序','投手的用球數'], correct:1, tag:null, subTag:null},
       {id:'score_q15', q:'記錄符號「PH」代表？', options:['代跑','代打','指定打擊','先發打者'], correct:1, tag:null, subTag:null},
-      {id:'score_q16', q:'記錄符號「DH」代表？', options:['代打','代跑','指定打擊','守備調度'], correct:2, tag:null, subTag:null}
+      {id:'score_q16', q:'記錄符號「DH」代表？', options:['代打','代跑','指定打擊','守備調度'], correct:2, tag:null, subTag:null},
+      {id:'geo_q1', q:'中國的地勢由西向東呈現什麼樣的變化？', options:['逐漸升高','逐漸降低，呈三級階梯','忽高忽低','完全平坦'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q2', q:'中國山地和高原約占全國總面積的比例最接近？', options:['三成','四成','六成','八成'], correct:2, tag:'trial_path', subTag:null},
+      {id:'geo_q3', q:'中國西高東低的地勢，對主要河川的流向造成什麼影響？', options:['大多向西流','大多向東流','大多向北流','大多向南流'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q4', q:'中國冬季氣溫南暖北冷，主要受到什麼因素影響？', options:['緯度','經度','人口','產業'], correct:0, tag:'trial_path', subTag:null},
+      {id:'geo_q5', q:'中國東半部屬於哪一種氣候類型，年降水量大多超過500毫米？', options:['高地氣候','乾燥氣候','季風氣候','極地氣候'], correct:2, tag:'trial_path', subTag:null},
+      {id:'geo_q6', q:'中國各地年降水量大致呈現什麼樣的空間分布趨勢？', options:['由東南向西北遞減','由西北向東南遞減','由北向南遞減','全國均勻分布'], correct:0, tag:'trial_path', subTag:null},
+      {id:'geo_q7', q:'中國西部內陸因距海遙遠、地形阻隔，年、日溫差都很大，屬於哪一種氣候類型？', options:['季風氣候','乾燥氣候','高地氣候','熱帶氣候'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q8', q:'青藏高原因海拔高聳，氣候與植被隨高度垂直變化，屬於哪一種氣候類型？', options:['季風氣候','乾燥氣候','高地氣候','溫帶氣候'], correct:2, tag:'trial_path', subTag:null},
+      {id:'geo_q9', q:'中國面積最大的盆地，大部分被塔克拉瑪干沙漠所占據，是哪一個盆地？', options:['四川盆地','塔里木盆地','準噶爾盆地','柴達木盆地'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q10', q:'有「世界屋脊」之稱、也是世界最高的高原是？', options:['雲貴高原','黃土高原','內蒙古高原','青藏高原'], correct:3, tag:'trial_path', subTag:null},
+      {id:'geo_q11', q:'中國人數最多的民族約占全國人口的九成以上，是哪一個民族？', options:['壯族','漢族','回族','滿族'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q12', q:'中國人口分布最主要用哪兩個地點的連線，劃分出人口稠密與稀疏兩區？', options:['北京—上海','黑河—騰衝','長江—黃河','廣州—成都'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q13', q:'中國在1970年代提出哪一項政策，希望透過限制生育控制人口成長？', options:['西部大開發','一胎化政策','一帶一路','東北振興'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q14', q:'一胎化政策實施多年後，中國目前面臨的人口問題不包含下列何者？', options:['少子化','人口老化','性別比失衡','人口總數持續暴增'], correct:3, tag:'trial_path', subTag:null},
+      {id:'geo_q15', q:'近代中國東南沿海居民大量遷往東南亞與海外，最主要的原因是什麼？', options:['氣候嚴寒','山多田少、糧食不足','政府強制遷移','追求較低物價'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q16', q:'中國農業活動以哪兩個地標的連線為界，形成「南稻北麥」的分布？', options:['長江、黃河','秦嶺、淮河','太行山、黃河','天山、崑崙山'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q17', q:'中國西部游牧民族常利用哪一種動物適應乾燥少雨的沙漠環境，被稱為「沙漠之舟」？', options:['犛牛','駱駝','馬','羊'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q18', q:'青藏高原牧民利用哪一種動物馱運重物，被稱為「高原之舟」？', options:['駱駝','犛牛','驢','馬'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q19', q:'1980年代中國在東南沿海設立以出口為導向的工業區，稱為什麼？', options:['自由貿易港','經濟特區','保稅倉','加工出口區'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q20', q:'中國四大經濟區中，哪一區進出口貿易最興盛、經濟最發達？', options:['西部地區','中部地區','東部地區','東北地區'], correct:2, tag:'trial_path', subTag:null},
+      {id:'geo_q21', q:'中國政府為了縮小東西部的經濟差距，於2000年提出什麼政策？', options:['西部大開發','東北振興','一帶一路','一胎化政策'], correct:0, tag:'trial_path', subTag:null},
+      {id:'geo_q22', q:'北京近郊匯聚許多高科技研發部門，因此有「中國矽谷」之稱的地方是？', options:['浦東新區','中關村','深圳特區','珠江三角洲'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q23', q:'日本列島由北海道、本州、四國與哪一個大島組成？', options:['沖繩島','九州','對馬島','濟州島'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q24', q:'朝鮮半島北邊與中國哪一座山脈接壤？', options:['崑崙山','長白山','太行山','秦嶺'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q25', q:'日本因為位處板塊交界帶，因此經常發生哪些自然現象？', options:['沙塵暴與乾旱','地震與火山','颶風與龍捲風','洪水與土石流'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q26', q:'朝鮮半島地勢最高、被稱為半島最高處的高原是？', options:['太白高原','蓋馬高原','內蒙古高原','青藏高原'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q27', q:'東北亞地區夏季主要吹哪個方向的季風，帶來大量水氣？', options:['西北季風','東南季風','西南季風','東北季風'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q28', q:'日本因山多平原少，農業經營以哪一種方式為主？', options:['粗放耕作','集約耕作','游牧','山牧季移'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q29', q:'日本的經濟骨幹，也是其工業實力的代表產業是？', options:['石化工業','汽車工業','紡織工業','造紙工業'], correct:1, tag:'trial_path', subTag:null},
+      {id:'geo_q30', q:'南韓近年推動文化產業發展，積極向世界推廣「韓流」的政策稱為什麼？', options:['文化立國','一帶一路','西部大開發','東北振興'], correct:0, tag:'trial_path', subTag:null},
+      {id:'geo_q31', q:'南、北韓之間唯一的接觸點、被設為共同警備區的地方是？', options:['首爾','板門店','平壤','釜山'], correct:1, tag:'trial_path', subTag:null}
     ],
     bonusTasks:[
       {id:'book', name:'熟讀一本課外書', points:15}
@@ -475,6 +507,15 @@ async function importTrainingLogItem(){
   showToast('已新增「訓練日誌」項目！');
   render();
 }
+async function importTrialPathItem(){
+  if(state.config.items.some(i=>i.id==='trial_path')){ showToast('「試煉之路」項目已經存在了'); return; }
+  const item = buildDefaultConfig().items.find(i=>i.id==='trial_path');
+  state.config.items.push(item);
+  await saveConfig(state.config);
+  showToast('已新增「試煉之路」項目！');
+  render();
+}
+async function importGeographyQuestions(){ return importQuestionsByPrefix('geo_', '地理'); }
 async function saveConfig(cfg){
   await dbSet('config', JSON.stringify(cfg));
 }
@@ -2494,6 +2535,11 @@ function renderCoachRole(){
       <div class="small-note" style="margin-bottom:8px;">偵測到你還沒有「訓練日誌」項目（依你提供的訓練日誌表格建立，需上傳照片／影片證明）。按下面按鈕直接加入，不會動到你其他的項目。</div>
       <button class="btn secondary" onclick="importTrainingLogItem()">📥 新增「訓練日誌」項目</button>
     </div>`}
+    ${state.config.items.some(i=>i.id==='trial_path') ? '' : `
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <div class="small-note" style="margin-bottom:8px;">偵測到你還沒有「試煉之路」項目。按下面按鈕直接加入，不會動到你其他的項目。</div>
+      <button class="btn secondary" onclick="importTrialPathItem()">📥 新增「試煉之路」項目</button>
+    </div>`}
     <table><thead><tr><th>項目名稱</th><th>能量／點數</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=3 class="empty">尚無項目</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
       <h2 style="font-size:16px;">${state.editingItemId?'編輯項目':'新增項目'}</h2>
@@ -2739,6 +2785,10 @@ function renderCoachRole(){
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <div class="small-note" style="margin-bottom:8px;">依照你提供的「記錄符號表」整理出的 16 題選擇題（守備位置代號、記錄符號 BB/HR/SB/FC 等），可以直接匯入題庫，不會動到你原本的項目或其他題目。</div>
       <button class="btn secondary" onclick="importScorekeepingQuestions()">📥 匯入棒球記錄符號選擇題（16題）</button>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <div class="small-note" style="margin-bottom:8px;">依照你提供的國中地理講義（中國自然環境、人口、產業、東北亞）整理出的 31 題選擇題，會標記對應「試煉之路」項目，學生完成試煉之路當天答題會優先抽到這些題目。可以直接匯入題庫，不會動到你原本的項目或其他題目。</div>
+      <button class="btn secondary" onclick="importGeographyQuestions()">📥 匯入地理科選擇題（31題）</button>
     </div>
     <table><thead><tr><th>題目</th><th>正解</th><th>對應項目</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=4 class="empty">尚無題目</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
