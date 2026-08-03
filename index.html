@@ -767,9 +767,11 @@ async function getConfig(){
       });
       parsed.questions = (parsed.questions||[]).filter(q=>!q.id.startsWith('geo_'));
     }
-    if(!parsed.geoQuestions.length){
-      parsed.geoQuestions = buildDefaultConfig().geoQuestions;
-    }
+    // 每次載入都補齊「內建題庫」裡新增的題目（依 id 比對，不會動到教練自己新增的題目）
+    const builtInGeoIds = new Set(parsed.geoQuestions.map(q=>q.id));
+    buildDefaultConfig().geoQuestions.forEach(q=>{
+      if(!builtInGeoIds.has(q.id)) parsed.geoQuestions.push(q);
+    });
     return parsed;
   }catch(e){
     const def = buildDefaultConfig();
