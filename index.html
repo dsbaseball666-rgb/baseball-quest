@@ -1312,6 +1312,7 @@ let state = {
   journalFormDraft: {},
   tutorialStep: 0,
   playerChips: [],
+  npcChat: null,
   addItemDraft: {name:'', xp:10, points:5, required:false, requireVideo:false, requireLogForm:false, subOptionsText:''},
   editingItemId: null,
   addQDraft: {q:'', options:['','','',''], correct:0, tag:'', subTag:''},
@@ -1405,6 +1406,7 @@ async function selectPlayer(name){
   state.currentPlayer = name;
   state.playerData = p;
   state.teamBoss = await getTeamBoss();
+  stopNpcChat();
   if(!p.tutorialSeen){
     state.showTutorial = true;
     state.tutorialStep = 0;
@@ -2097,6 +2099,41 @@ async function reviewLog(name, index, decision){
   render();
   refreshOverview();
 }
+const NPC_CHAT_LINES = [
+  '今天要認真練習！',
+  '教練我上禮拜UP了！',
+  '好想打敗下一隻怪物～',
+  '福利社又出新東西了嗎？',
+  '誰要一起去修練之路？',
+  '我今天已經打過卡了！',
+  '感覺快要轉職了！',
+  '肚子好餓，練完要吃飯',
+  '訓練日誌你寫了嗎？',
+  '一起加油！',
+  '揮棒要記得放鬆肩膀～',
+  '今天的Boss看起來很強',
+  '我要衝到滿級！',
+  '技能終於解鎖了！'
+];
+let npcChatTimer = null;
+function startNpcChat(){
+  if(npcChatTimer) return;
+  npcChatTimer = setInterval(()=>{
+    const chips = state.playerChips || [];
+    if(state.currentPlayer || chips.length===0) return;
+    const idx = Math.floor(Math.random()*chips.length);
+    const line = NPC_CHAT_LINES[Math.floor(Math.random()*NPC_CHAT_LINES.length)];
+    state.npcChat = { index: idx, line };
+    render();
+    setTimeout(()=>{
+      if(state.npcChat && state.npcChat.index===idx){ state.npcChat = null; render(); }
+    }, 3000);
+  }, 4500);
+}
+function stopNpcChat(){
+  if(npcChatTimer){ clearInterval(npcChatTimer); npcChatTimer = null; }
+  state.npcChat = null;
+}
 let overviewCache = [];
 async function refreshOverview(){
   const names = await listPlayers();
@@ -2561,6 +2598,25 @@ function renderPlayerRole(){
         <div class="lv">查看進度 →</div>
       </div>`;
     }).join('');
+    let npcPlazaHtml = '';
+    if((state.playerChips||[]).length){
+      startNpcChat();
+      const npcs = state.playerChips.map((pc,i)=>{
+        const ch = characterById(pc.avatarId);
+        const chatting = state.npcChat && state.npcChat.index===i;
+        return `<div style="position:relative;text-align:center;width:52px;flex-shrink:0;">
+          ${chatting ? `<div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:#fff;color:#222;font-size:10px;padding:4px 8px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:2;">${esc(state.npcChat.line)}</div>` : ''}
+          <img src="${ch.image}" style="width:36px;height:36px;image-rendering:pixelated;${chatting?'animation:bossPulse 0.6s ease-in-out infinite;':''}">
+          <div class="small-note" style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(pc.name)}</div>
+        </div>`;
+      }).join('');
+      npcPlazaHtml = `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);">
+        <div class="small-note" style="margin-bottom:8px;">🏘️ 大家都在這裡</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">${npcs}</div>
+      </div>`;
+    } else {
+      stopNpcChat();
+    }
     const starterIds = (state.config.starterCharacterIds && state.config.starterCharacterIds.length) ? state.config.starterCharacterIds : STARTER_CHARACTER_IDS;
     let avatarPickerHtml = CHARACTER_ROSTER.filter(c=>starterIds.includes(c.id)).map(c=>{
       const selected = state.newPlayerAvatarId===c.id;
@@ -2591,17 +2647,17 @@ function renderPlayerRole(){
       </div>`;
     }).join('');
     return `
-    <div class="panel" style="padding:0;overflow:hidden;position:relative;">
-      <img src="${TEAM_PHOTO}" alt="球隊合照" style="width:100%;display:block;">
-      <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(11,22,38,0) 40%, rgba(11,22,38,0.92) 100%);"></div>
-      <div style="position:absolute;left:0;right:0;bottom:0;padding:16px 20px;">
-        <div style="font-family:var(--font-display);font-size:28px;color:var(--accent-light);text-shadow:0 2px 8px rgba(0,0,0,0.6);">⚾ 訓練競技場</div>
-        <div class="small-note" style="color:var(--text-chalk);opacity:0.85;">選好暱稱／ID，開始今天的訓練吧！</div>
+    <div class="panel" style="padding:10px 16px;display:flex;align-items:center;gap:12px;">
+      <img src="${TEAM_PHOTO}" alt="球隊" style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+      <div style="min-width:0;">
+        <div style="font-family:var(--font-display);font-size:17px;color:var(--accent-light);">⚾ 訓練競技場</div>
+        <div class="small-note">選好暱稱／ID，開始今天的訓練吧！</div>
       </div>
     </div>
     <div class="panel">
       <h2><span class="eyebrow">Step 1</span>選擇你的暱稱／ID</h2>
       <div class="player-grid">${chips || '<div class="empty">還沒有任何球員，先在下方建立一位吧</div>'}</div>
+      ${npcPlazaHtml}
     </div>
     <div class="panel">
       <h2><span class="eyebrow">Step 2</span>新球員？在這裡建立</h2>
