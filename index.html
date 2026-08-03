@@ -132,6 +132,7 @@
   .npc-bubble{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:#fff;color:#222;font-size:10px;padding:4px 8px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:2;}
   @keyframes npcWalk{0%{left:2%;}48%{left:calc(100% - 80px);}50%{left:calc(100% - 80px);}98%{left:2%;}100%{left:2%;}}
   @keyframes npcFlip{0%{transform:scaleX(1);}49%{transform:scaleX(1);}50%{transform:scaleX(-1);}99%{transform:scaleX(-1);}100%{transform:scaleX(1);}}
+  @keyframes npcBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
   @keyframes shake{
     0%,100%{transform:translate(0,0) rotate(0);}
     20%{transform:translate(-6px,2px) rotate(-4deg);}
@@ -2628,32 +2629,18 @@ function renderPlayerRole(){
       stopNpcChat();
     }
     const starterIds = (state.config.starterCharacterIds && state.config.starterCharacterIds.length) ? state.config.starterCharacterIds : STARTER_CHARACTER_IDS;
-    let avatarPickerHtml = CHARACTER_ROSTER.filter(c=>starterIds.includes(c.id)).map(c=>{
+    let avatarPickerHtml = CHARACTER_ROSTER.filter(c=>starterIds.includes(c.id)).map((c,ci)=>{
       const selected = state.newPlayerAvatarId===c.id;
-      const flavor = CLASS_FLAVOR[c.id] || {scenario:'', tool:''};
       const tiers = classTiersFor(c.id).slice().sort((a,b)=>a.level-b.level);
       const nextTier = tiers.find(t=>t.level>1);
-      return `<div onclick="state.newPlayerAvatarId='${c.id}';render();" style="cursor:pointer;border:2px solid ${selected?'var(--accent-light)':'var(--line)'};border-radius:16px;padding:16px;margin-bottom:14px;background:${selected?'rgba(255,209,102,0.08)':'var(--bg-panel-2)'};transition:border-color .15s ease;">
-        <div style="display:flex;gap:14px;align-items:center;">
-          <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:2px solid ${selected?'var(--accent-light)':'var(--line)'};flex-shrink:0;background:var(--bg-deep);display:flex;align-items:center;justify-content:center;">
-            <img src="${c.image}" style="width:56px;height:56px;image-rendering:pixelated;">
-          </div>
-          <div>
-            <div class="small-note" style="letter-spacing:1.5px;text-transform:uppercase;color:var(--accent-green);font-size:10px;">First Class</div>
-            <div style="font-family:var(--font-display);font-size:24px;color:var(--accent-light);letter-spacing:0.5px;">${esc(c.name)}</div>
-          </div>
+      const bobDelay = (ci*0.3).toFixed(2);
+      return `<div onclick="state.newPlayerAvatarId='${c.id}';render();" style="cursor:pointer;text-align:center;border:2px solid ${selected?'var(--accent-light)':'var(--line)'};border-radius:12px;padding:10px 6px;background:${selected?'rgba(255,209,102,0.10)':'var(--bg-panel-2)'};transition:border-color .15s ease;">
+        <div style="width:56px;height:56px;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+          <img src="${c.image}" style="width:52px;height:52px;image-rendering:pixelated;animation:npcBob 1.6s ease-in-out infinite ${bobDelay}s;">
         </div>
-        <div style="margin-top:12px;font-size:12px;color:var(--text-dim);line-height:1.7;">
-          <div><b style="color:var(--text-chalk);">冒險情境</b>　${esc(flavor.scenario)}</div>
-          <div><b style="color:var(--text-chalk);">核心工具</b>　${esc(flavor.tool)}</div>
-        </div>
-        ${nextTier ? `
-        <div style="margin-top:10px;background:var(--bg-deep);border:1px solid var(--line);border-radius:10px;padding:10px 12px;">
-          <div class="small-note" style="color:var(--accent-light);letter-spacing:1.5px;text-transform:uppercase;font-size:10px;">Job Skill ・ Lv.${nextTier.level} 解鎖</div>
-          <div style="font-weight:600;margin-top:3px;font-size:13px;">${esc(nextTier.title)}</div>
-          ${nextTier.desc?`<div class="small-note" style="margin-top:2px;">${esc(nextTier.desc)}</div>`:''}
-        </div>` : ''}
-        <button class="btn ${selected?'gold':'secondary'}" style="width:100%;margin-top:12px;" onclick="event.stopPropagation();state.newPlayerAvatarId='${c.id}';render();">${selected?'✓ 已選擇':'選擇'} ${esc(c.name)}</button>
+        <div style="font-family:var(--font-display);font-size:15px;color:${selected?'var(--accent-light)':'var(--text-chalk)'};margin-top:2px;">${esc(c.name)}</div>
+        ${nextTier ? `<div class="small-note" style="font-size:9px;line-height:1.3;">Lv.${nextTier.level}→${esc(nextTier.title)}</div>` : ''}
+        ${selected ? '<div class="small-note" style="color:var(--accent-light);font-size:10px;margin-top:2px;">✓ 已選擇</div>' : ''}
       </div>`;
     }).join('');
     return `
@@ -2684,7 +2671,7 @@ function renderPlayerRole(){
       <div style="margin-top:16px;">
         <label>選擇你的角色</label>
         <div class="small-note" style="margin-bottom:10px;color:var(--accent-red);">⚠️ 職業選好之後就不能自己更改了，請仔細考慮清楚再選喔！（如果真的選錯，要請教練幫忙處理）</div>
-        <div>${avatarPickerHtml}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">${avatarPickerHtml}</div>
       </div>
       <div style="margin-top:14px;">
         <button class="btn gold" onclick="createPlayer()">建立並開始</button>
