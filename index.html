@@ -19,7 +19,7 @@
     --font-body:'Rubik','Noto Sans TC',sans-serif;
     --font-mono:'JetBrains Mono',monospace;
   }
-  @import url('https://fonts.googleapis.com/css2?family=Teko:wght@500;600;700&family=Rubik:wght@400;500;700&family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Teko:wght@500;600;700&family=Rubik:wght@400;500;700&family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&display=swap');
   *{box-sizing:border-box;}
   body{
     margin:0;
@@ -127,11 +127,13 @@
   .boss-emoji{font-size:88px;filter:drop-shadow(0 0 28px rgba(228,87,46,0.7)) drop-shadow(0 0 10px rgba(255,80,20,0.5));animation:bossPulse 2.2s ease-in-out infinite;}
   @keyframes bossPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
   .npc-plaza{position:relative;height:180px;overflow:hidden;border-radius:14px;background:linear-gradient(180deg, rgba(42,157,143,0.14), rgba(42,157,143,0.03));border:1px dashed var(--line);}
-  .npc-walker{position:absolute;bottom:10px;width:76px;text-align:center;}
+  .npc-walker{position:absolute;bottom:10px;width:76px;text-align:center;z-index:5;}
   .npc-sprite-img{width:64px;height:64px;image-rendering:pixelated;}
-  .npc-bubble{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:#fff;color:#222;font-size:10px;padding:4px 8px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:2;}
+  .npc-bubble{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:8px;background:#0b1220;border:2px solid var(--accent-light);color:var(--accent-light);font-family:'Press Start 2P',var(--font-mono),monospace;font-size:8px;line-height:1.7;padding:6px 8px;white-space:nowrap;box-shadow:2px 2px 0 rgba(0,0,0,0.5);z-index:2;}
+  .npc-bubble::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--accent-light);}
   @keyframes npcWalk{0%{left:2%;}48%{left:calc(100% - 80px);}50%{left:calc(100% - 80px);}98%{left:2%;}100%{left:2%;}}
-  @keyframes npcFlip{0%{transform:scaleX(1);}49%{transform:scaleX(1);}50%{transform:scaleX(-1);}99%{transform:scaleX(-1);}100%{transform:scaleX(1);}}
+  @keyframes npcFlip{0%{scale:1 1;}49%{scale:1 1;}50%{scale:-1 1;}99%{scale:-1 1;}100%{scale:1 1;}}
+  @keyframes npcBounce{0%,100%{translate:0 0;}50%{translate:0 -4px;}}
   @keyframes npcBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
   @keyframes shake{
     0%,100%{transform:translate(0,0) rotate(0);}
@@ -2123,6 +2125,13 @@ const NPC_CHAT_LINES = [
   '技能終於解鎖了！'
 ];
 let npcChatTimer = null;
+function plazaNightTint(){
+  const hr = new Date().getHours();
+  if(hr<5 || hr>=21) return 'rgba(5,10,35,0.45)';
+  if(hr<7) return 'rgba(25,25,65,0.28)';
+  if(hr>=18) return 'rgba(60,30,10,0.20)';
+  return 'transparent';
+}
 function startNpcChat(){
   if(npcChatTimer) return;
   npcChatTimer = setInterval(()=>{
@@ -2613,9 +2622,10 @@ function renderPlayerRole(){
         const chatting = state.npcChat && state.npcChat.index===i;
         const dur = (6 + (i*2.7)%6).toFixed(2);
         const delay = (-(i*3.1)%dur).toFixed(2);
+        const bounceDur = (0.32 + (i%3)*0.05).toFixed(2);
         return `<div class="npc-walker" style="animation:npcWalk ${dur}s linear infinite ${delay}s;">
           ${chatting ? `<div class="npc-bubble">${esc(state.npcChat.line)}</div>` : ''}
-          <div style="animation:npcFlip ${dur}s linear infinite ${delay}s;">
+          <div style="animation:npcFlip ${dur}s linear infinite ${delay}s, npcBounce ${bounceDur}s ease-in-out infinite;">
             <img class="npc-sprite-img" src="${ch.image}" style="${chatting?'filter:drop-shadow(0 0 6px rgba(255,209,102,0.8));':''}">
           </div>
           <div class="small-note" style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(pc.name)}</div>
@@ -2623,7 +2633,10 @@ function renderPlayerRole(){
       }).join('');
       npcPlazaHtml = `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);">
         <div class="small-note" style="margin-bottom:8px;">🏘️ 大家都在這裡</div>
-        <div class="npc-plaza">${npcs}</div>
+        <div class="npc-plaza">
+          <div style="position:absolute;inset:0;background:${plazaNightTint()};pointer-events:none;z-index:1;transition:background 3s;"></div>
+          ${npcs}
+        </div>
       </div>`;
     } else {
       stopNpcChat();
