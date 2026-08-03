@@ -126,6 +126,12 @@
   .monster-emoji.shake{animation:shake .35s ease;}
   .boss-emoji{font-size:88px;filter:drop-shadow(0 0 28px rgba(228,87,46,0.7)) drop-shadow(0 0 10px rgba(255,80,20,0.5));animation:bossPulse 2.2s ease-in-out infinite;}
   @keyframes bossPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+  .npc-plaza{position:relative;height:100px;overflow:hidden;border-radius:12px;background:linear-gradient(180deg, rgba(42,157,143,0.10), rgba(42,157,143,0.02));border:1px dashed var(--line);}
+  .npc-walker{position:absolute;bottom:6px;width:52px;text-align:center;}
+  .npc-sprite-img{width:34px;height:34px;image-rendering:pixelated;}
+  .npc-bubble{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:#fff;color:#222;font-size:10px;padding:4px 8px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:2;}
+  @keyframes npcWalk{0%{left:2%;}48%{left:calc(100% - 56px);}50%{left:calc(100% - 56px);}98%{left:2%;}100%{left:2%;}}
+  @keyframes npcFlip{0%{transform:scaleX(1);}49%{transform:scaleX(1);}50%{transform:scaleX(-1);}99%{transform:scaleX(-1);}100%{transform:scaleX(1);}}
   @keyframes shake{
     0%,100%{transform:translate(0,0) rotate(0);}
     20%{transform:translate(-6px,2px) rotate(-4deg);}
@@ -2604,15 +2610,19 @@ function renderPlayerRole(){
       const npcs = state.playerChips.map((pc,i)=>{
         const ch = characterById(pc.avatarId);
         const chatting = state.npcChat && state.npcChat.index===i;
-        return `<div style="position:relative;text-align:center;width:52px;flex-shrink:0;">
-          ${chatting ? `<div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:#fff;color:#222;font-size:10px;padding:4px 8px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:2;">${esc(state.npcChat.line)}</div>` : ''}
-          <img src="${ch.image}" style="width:36px;height:36px;image-rendering:pixelated;${chatting?'animation:bossPulse 0.6s ease-in-out infinite;':''}">
+        const dur = (6 + (i*2.7)%6).toFixed(2);
+        const delay = (-(i*3.1)%dur).toFixed(2);
+        return `<div class="npc-walker" style="animation:npcWalk ${dur}s linear infinite ${delay}s;">
+          ${chatting ? `<div class="npc-bubble">${esc(state.npcChat.line)}</div>` : ''}
+          <div style="animation:npcFlip ${dur}s linear infinite ${delay}s;">
+            <img class="npc-sprite-img" src="${ch.image}" style="${chatting?'filter:drop-shadow(0 0 6px rgba(255,209,102,0.8));':''}">
+          </div>
           <div class="small-note" style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(pc.name)}</div>
         </div>`;
       }).join('');
       npcPlazaHtml = `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);">
         <div class="small-note" style="margin-bottom:8px;">🏘️ 大家都在這裡</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">${npcs}</div>
+        <div class="npc-plaza">${npcs}</div>
       </div>`;
     } else {
       stopNpcChat();
