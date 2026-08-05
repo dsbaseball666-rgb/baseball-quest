@@ -303,8 +303,7 @@ function buildDefaultConfig(){
         {label:'自訂內容', xp:1, points:1}
       ]},
       {id:'pitching', name:'投球練習', xp:10, points:5, required:false, requireVideo:false, subOptions:[]},
-      {id:'training_log', name:'訓練日誌', xp:15, points:8, required:false, requireVideo:false, requireLogForm:true, subOptions:[]},
-      {id:'trial_path', name:'試煉之路', xp:12, points:6, required:false, requireVideo:false, requireLogForm:false, requireGeoChallenge:true, subOptions:[]}
+      {id:'training_log', name:'訓練日誌', xp:15, points:8, required:false, requireVideo:false, requireLogForm:true, subOptions:[]}
     ],
     questions:[
       {id:'q1', q:'打擊時，重心應該放在？', options:['前腳','後腳','雙腳平均','腳尖'], correct:2, tag:null, subTag:null},
@@ -752,10 +751,9 @@ async function getConfig(){
         it.requireLogForm = true;
       }
       if(it.requireGeoChallenge==null) it.requireGeoChallenge = false;
-      if(it.id==='trial_path' && !it.requireGeoChallenge){
-        it.requireGeoChallenge = true;
-      }
     });
+    // 試煉之路已改為獨立的每日測驗機制（不計分、不給能量），不再是「項目」，舊資料裡若還留著就移除
+    parsed.items = (parsed.items||[]).filter(it=>it.id!=='trial_path');
     (parsed.questions||[]).forEach(q=>{ if(q.subTag===undefined) q.subTag = null; });
     // 地理題庫獨立管理，不跟主題庫混在一起；若舊資料裡還留有 geo_ 開頭的題目，搬移到獨立題庫
     if(!parsed.geoQuestions) parsed.geoQuestions = [];
@@ -807,14 +805,6 @@ async function importTrainingLogItem(){
   showToast('已新增「訓練日誌」項目！');
   render();
 }
-async function importTrialPathItem(){
-  if(state.config.items.some(i=>i.id==='trial_path')){ showToast('「試煉之路」項目已經存在了'); return; }
-  const item = buildDefaultConfig().items.find(i=>i.id==='trial_path');
-  state.config.items.push(item);
-  await saveConfig(state.config);
-  showToast('已新增「試煉之路」項目！');
-  render();
-}
 async function addGeoQuestion(){
   const d = state.addGeoQuestionDraft;
   if(!d.q.trim()){ showToast('請輸入題目內容'); return; }
@@ -847,7 +837,8 @@ function defaultPlayer(name, realName, avatarId){
     name, realName: realName||'', avatarId: avatarId || (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id) || null,
     level:1, energy:0, points:0, ultimateGauge:0,
     correct:0, wrong:0, streak:0, lastDate:null,
-    log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false
+    log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false,
+    trialDate:null, trialCount:0, trialCorrect:0
   };
 }
 function normalizePlayer(p){
@@ -864,6 +855,10 @@ function normalizePlayer(p){
   if(p.lastLongGoalDate===undefined) p.lastLongGoalDate = null;
   if(p.lastMidGoalDate===undefined) p.lastMidGoalDate = null;
   if(p.lastShortGoalDate===undefined) p.lastShortGoalDate = null;
+  if(p.trialDate===undefined) p.trialDate = null;
+  if(p.trialCount==null) p.trialCount = 0;
+  if(p.trialCorrect==null) p.trialCorrect = 0;
+  if(p.trialDate !== todayStr()){ p.trialDate = todayStr(); p.trialCount = 0; p.trialCorrect = 0; }
   return p;
 }
 function characterById(id){
@@ -1503,10 +1498,6 @@ function toggleItem(id){
       render();
       return;
     }
-    if(it && it.requireGeoChallenge){
-      openGeoChallenge(id);
-      return;
-    }
   }
   checklistDraft[id] = !checklistDraft[id];
   if(!checklistDraft[id]){ delete subDraft[id]; delete journalDraft[id]; }
@@ -1542,10 +1533,13 @@ async function finalizeSpecialItem(itemId, extra){
   render();
   return r;
 }
-function openGeoChallenge(itemId){
+function openGeoChallenge(){
   const qs = state.config.geoQuestions || [];
   if(!qs.length){ showToast('教練還沒有新增試煉之路的題目喔'); return; }
-  state.showGeoChallenge = itemId;
+  const p = state.playerData;
+  if(p.trialDate !== todayStr()){ p.trialDate = todayStr(); p.trialCount = 0; p.trialCorrect = 0; }
+  if(p.trialCount >= 10){ showToast('今天的 10 題試煉都測驗完囉，明天再來挑戰！'); return; }
+  state.showGeoChallenge = true;
   state.geoChallengeQ = qs[Math.floor(Math.random()*qs.length)];
   state.geoChallengeSelected = null;
   render();
@@ -1555,21 +1549,23 @@ async function answerGeoChallenge(idx){
   const q = state.geoChallengeQ;
   const correct = idx===q.correct;
   state.geoChallengeSelected = idx;
+  const p = state.playerData;
+  if(p.trialDate !== todayStr()){ p.trialDate = todayStr(); p.trialCount = 0; p.trialCorrect = 0; }
+  p.trialCount += 1;
+  if(correct) p.trialCorrect += 1;
+  await savePlayer(p);
   render();
   await new Promise(res=>setTimeout(res, 1400));
-  if(correct){
-    const itemId = state.showGeoChallenge;
+  if(p.trialCount >= 10){
     state.showGeoChallenge = null;
     state.geoChallengeQ = null;
     state.geoChallengeSelected = null;
-    const r = await finalizeSpecialItem(itemId, {detail:'已通過試煉'});
-    if(r) showToast('🗺️ 答對了！試煉之路通過！獲得 ⚡'+r.energy+' 能量、💰'+r.points+' 點數');
+    showToast('🗺️ 今天的 10 題試煉測驗完成！答對 '+p.trialCorrect+' / 10 題');
     render();
   } else {
     const qs = state.config.geoQuestions || [];
     state.geoChallengeQ = qs[Math.floor(Math.random()*qs.length)];
     state.geoChallengeSelected = null;
-    showToast('答錯了，再試一題！');
     render();
   }
 }
@@ -2272,6 +2268,9 @@ function renderGeoChallengeModal(){
   const q = state.geoChallengeQ;
   const sel = state.geoChallengeSelected;
   if(!q) return '';
+  const p = state.playerData;
+  const countToday = (p.trialDate===todayStr()) ? (p.trialCount||0) : 0;
+  const qNum = Math.min(10, countToday+1);
   const opts = q.options.map((o,i)=>{
     let cls = 'opt-btn';
     if(sel!==null){
@@ -2284,10 +2283,10 @@ function renderGeoChallengeModal(){
   <div class="modal-bg" onclick="if(event.target===this && ${sel===null}) closeGeoChallenge()">
     <div class="modal" style="max-width:420px;">
       <div class="flex-between" style="align-items:flex-start;">
-        <h3 style="margin:0;">🗺️ 試煉之路</h3>
+        <h3 style="margin:0;">🗺️ 試煉之路 ・ 第 ${qNum}/10 題</h3>
         ${sel===null?'<button class="btn secondary small" onclick="closeGeoChallenge()">✕</button>':''}
       </div>
-      <div class="small-note" style="margin:8px 0 14px;">答對一題就能完成試煉，答錯可以再試一題！</div>
+      <div class="small-note" style="margin:8px 0 14px;">純練習測驗，不計分、不扣不加能量，答錯也沒關係，答完就換下一題！</div>
       <p style="font-size:16px;line-height:1.6;">${esc(q.q)}</p>
       ${opts}
     </div>
@@ -2710,7 +2709,6 @@ function renderPlayerRole(){
   const allDoneToday = state.config.items.length>0 && state.config.items.every(it=>doneToday.has(it.name));
 
   const trainingLogItem = state.config.items.find(it=>it.id==='training_log');
-  const trialPathItem = state.config.items.find(it=>it.id==='trial_path');
   function specialItemTile(it, icon, label){
     if(!it) return '';
     const done = doneToday.has(it.name);
@@ -2721,7 +2719,14 @@ function renderPlayerRole(){
     </div>`;
   }
   const trainingLogTile = specialItemTile(trainingLogItem, '📖', '點我線上填寫');
-  const trialPathTile = specialItemTile(trialPathItem, '🗺️', '點我挑戰');
+  const trialFull = (p.trialDate===todayStr()) && (p.trialCount||0)>=10;
+  const trialCountToday = (p.trialDate===todayStr()) ? (p.trialCount||0) : 0;
+  const trialCorrectToday = (p.trialDate===todayStr()) ? (p.trialCorrect||0) : 0;
+  const trialPathTile = `<div class="panel battle-card" style="cursor:${trialFull?'default':'pointer'};padding:14px;margin-top:0;${trialFull?'opacity:0.6;':''}" onclick="${trialFull?`showToast('今天的 10 題試煉都測驗完囉，明天再來挑戰！')`:`openGeoChallenge()`}">
+    <div style="font-size:30px;">🗺️</div>
+    <div class="monster-name" style="font-size:15px;">試煉之路</div>
+    <div class="small-note">${trialFull?('✅ 今天完成 10 題，答對 '+trialCorrectToday):(trialCountToday>0?('已測驗 '+trialCountToday+'/10 題，答對 '+trialCorrectToday):'每天最多測驗 10 題，純練習不計分')}</div>
+  </div>`;
 
   let questHint;
   if(!allDoneToday){
@@ -3081,11 +3086,6 @@ function renderCoachRole(){
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <div class="small-note" style="margin-bottom:8px;">偵測到你還沒有「訓練日誌」項目（依你提供的訓練日誌表格建立，需上傳照片／影片證明）。按下面按鈕直接加入，不會動到你其他的項目。</div>
       <button class="btn secondary" onclick="importTrainingLogItem()">📥 新增「訓練日誌」項目</button>
-    </div>`}
-    ${state.config.items.some(i=>i.id==='trial_path') ? '' : `
-    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
-      <div class="small-note" style="margin-bottom:8px;">偵測到你還沒有「試煉之路」項目。按下面按鈕直接加入，不會動到你其他的項目。</div>
-      <button class="btn secondary" onclick="importTrialPathItem()">📥 新增「試煉之路」項目</button>
     </div>`}
     <table><thead><tr><th>項目名稱</th><th>能量／點數</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=3 class="empty">尚無項目</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
