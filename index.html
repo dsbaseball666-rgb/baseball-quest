@@ -708,6 +708,21 @@ function buildDefaultConfig(){
       {id:'civ3_q34', q:'明確規範工資、工作時間、休假、童工等重要事項的法規稱為？', options:['勞動基準法','就業保險法','消費者保護法','公平交易法'], correct:0},
       {id:'civ3_q35', q:'勞工失業後，若符合《就業保險法》規定，可以申請什麼？', options:['失業給付','退休金','傷病給付','生育給付'], correct:0},
       {id:'civ3_q36', q:'15歲以上具有工作能力與意願、可以投入工作的人口，統稱為？', options:['勞動力','就業者','失業者','勞工'], correct:0}
+    ],
+    knowledgeBase: [
+      {id:'kb1', category:'冰敷', title:'冰敷的原理', content:'降低身體溫度\n使血管收縮\n減少血流量\n代謝降低\n抑制疼痛\n降低神經傳導速率'},
+      {id:'kb2', category:'冰敷', title:'冰敷適應症', content:'傷害發生一小時內盡快冰敷（急性期）\n扭拉傷肌肉、肌腱或韌帶\n無開放性傷口\n\n冷療形式不同，時間也不同：\n・直接冰敷：15-20分鐘\n・冰按摩：5-10分鐘'},
+      {id:'kb3', category:'冰敷', title:'冰敷的溫度與時間效益', content:'降低5-7°C → 明顯疼痛緩解\n皮膚溫度降至14.4°C → 最佳止痛效果\n降至13.9°C → 減少局部血流\n肌肉內（或受傷組織）溫度需降至5-15°C之間 → 降低組織與細胞代謝較佳之溫度範圍'},
+      {id:'kb4', category:'冰敷', title:'冰敷的禁忌', content:'血栓性靜脈炎\n患處有傷口\n循環系統病變者（無法分辨冷熱）\n糖尿病患者\n免疫系統病變者\n冰過敏\n雷諾氏症'},
+      {id:'kb5', category:'熱敷', title:'熱敷的原理與功效', content:'舒緩疼痛、消除疲勞、緩解情緒\n使局部血管擴張 → 增進血液循環 → 提高細胞新陳代謝\n加速組織癒合、舒緩肌肉痙攣\n避免組織沾黏、提升關節活動度'},
+      {id:'kb6', category:'熱敷', title:'熱敷的適應症與注意事項', content:'【適用】\n溫度：38-40°C\n亞急性期、恢復期\n一次不超過20分鐘\n慢性發炎疼痛、拉扭傷\n肌肉疲勞與痙攣等\n\n【注意事項】\n急性期不宜熱敷\n勿直接接觸皮膚\n糖尿病、中風、類風溼關節炎、腦血管疾病患者不宜熱敷'},
+      {id:'kb7', category:'冰熱比較', title:'冰療 vs 熱療 怎麼選', content:'【受傷時間】急性期12或72小時內 → 冰療；超過12或72小時 → 熱療\n【紅腫發熱】冰療勝\n【熱敷後痛（尚在發炎）】冰療勝\n【慢性痠痛】熱療勝\n【治療機制】冰療：抑制發炎、降低神經傳遞／熱療：放鬆肌肉、放鬆心情、增加血液循環\n【再次受傷】回到「受傷時間」重新評估\n\n綜合評估：冰療、熱療需視情況改變，判斷錯誤可能使病情加重！'},
+      {id:'kb8', category:'冰熱比較', title:'冷熱交替法', content:'刺激微血管收縮，幫助排出代謝物質，增進淋巴循環\n熱敷39-41°C，冷敷10-17°C（0°以上為原則）\n熱開始，冷結束（時間比例3:1 或 4:1）\n應於30分鐘內結束\n\n適用時機：亞急性期'},
+      {id:'kb9', category:'急性期處理', title:'PEACE 原則（急性期，24-72小時內）', content:'P 保護患處 Protection：受傷後1-3天內限制活動及負重（無痛為原則）\nE 抬高患肢 Elevation：患肢盡量高於心臟，減少組織腫脹\nA 適當藥物 Avoid Anti-inflammatories：非必要，避免使用抗發炎藥物\nC 加壓固定 Compression：貼紮或彈性繃帶加壓可以降低關節腫脹以及出血\nE 認知教育 Education：認識傷後恢復的進程，避免過度的期待或壓力\n\n判斷標準：受傷部位發紅、水腫、溫熱、疼痛'},
+      {id:'kb10', category:'亞急性期處理', title:'LOVE 原則（亞急性期，72小時後）', content:'L 適當負重 Load：在無痛的情況下適當的承重，增加組織再生與重塑\nO 積極面對 Optimism：正面樂觀的態度可以減少不適以及避免壓力影響癒合\nV 有氧循環 Vascularisation：心肺有氧訓練可以促進血液循環，增加代謝\nE 開始運動 Exercise：有計劃的無痛訓練，增加活動穩定度、肌力以及本體感覺，避免再次受傷\n\n判斷標準：受傷部位發紅、水腫、溫熱、疼痛'},
+      {id:'kb11', category:'受傷分期總覽', title:'急性期／亞急性期／恢復期總表', content:'【急性期】傷後12-48小時\n處置：PRICE、PEACE&LOVE\n症狀：紅腫熱痛，日常生活受影響\n目標：抑制疼痛腫脹、預防痙攣、維持關節活動度(ROM)\n\n【亞急性期】傷後3-7日\n處置：伸展運動（增加組織強度）\n症狀：日常生活不受影響，但運動表現受影響\n目標：促進組織癒合、軟組織機能重建、關節功能與ROM恢復\n\n【恢復期】亞急性期過後\n處置：運動機能重建\n目標：重返賽場'},
+      {id:'kb12', category:'熱身伸展', title:'熱身小總結（Warm Up）', content:'【靜態伸展】\n研究指出若「只有做靜態伸展」且伸展超過45秒，對運動的表現會下降。\n導致運動表現降低的因素：\n①降低神經激活的頻率＆神經單位招募\n②肌腱部位黏彈性降低\n\n【動態伸展】\n單獨的靜態伸展可能對運動表現有負面影響，但若在靜態伸展後加上動態伸展，則有助於運動表現。\n\n【筋膜放鬆（滾筒按摩）】\n可以增加關節活動範圍'},
+      {id:'kb13', category:'熱身伸展', title:'動態伸展 vs 靜態伸展', content:'【動態伸展】\n肌肉活化\n促進血液流動\n激活中樞神經系統\n增加運動範圍\n肌力與爆發力\n\n【靜態伸展】\n加速恢復肌肉彈性\n改善關節活動度\n減輕肌肉、關節壓力\n減少運動傷害機會\n增加血液循環、新陳代謝'}
     ]
   };
 }
@@ -770,6 +785,12 @@ async function getConfig(){
     buildDefaultConfig().geoQuestions.forEach(q=>{
       if(!builtInGeoIds.has(q.id)) parsed.geoQuestions.push(q);
     });
+    // 防護知識庫：同樣每次載入都補齊新增的內建條目，不會動到教練自訂的內容
+    if(!parsed.knowledgeBase) parsed.knowledgeBase = [];
+    const builtInKbIds = new Set(parsed.knowledgeBase.map(k=>k.id));
+    buildDefaultConfig().knowledgeBase.forEach(k=>{
+      if(!builtInKbIds.has(k.id)) parsed.knowledgeBase.push(k);
+    });
     return parsed;
   }catch(e){
     const def = buildDefaultConfig();
@@ -819,6 +840,22 @@ async function addGeoQuestion(){
 }
 async function deleteGeoQuestion(id){
   state.config.geoQuestions = (state.config.geoQuestions||[]).filter(q=>q.id!==id);
+  await saveConfig(state.config);
+  render();
+}
+async function addKnowledgeEntry(){
+  const d = state.addKnowledgeDraft;
+  if(!d.category.trim() || !d.title.trim()){ showToast('請填寫分類與標題'); return; }
+  const id = 'kb_'+Date.now();
+  if(!state.config.knowledgeBase) state.config.knowledgeBase = [];
+  state.config.knowledgeBase.push({id, category:d.category.trim(), title:d.title.trim(), content:d.content.trim()});
+  await saveConfig(state.config);
+  state.addKnowledgeDraft = {category:'', title:'', content:''};
+  showToast('已新增知識條目');
+  render();
+}
+async function deleteKnowledgeEntry(id){
+  state.config.knowledgeBase = (state.config.knowledgeBase||[]).filter(k=>k.id!==id);
   await saveConfig(state.config);
   render();
 }
@@ -1313,6 +1350,7 @@ let state = {
   viewingJournalIndex: null,
   showJournalForm: null,
   showGeoChallenge: null,
+  showKnowledgeBase: false,
   geoChallengeQ: null,
   geoChallengeSelected: null,
   journalFormDraft: {},
@@ -1341,7 +1379,8 @@ let state = {
   addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'},
   skillStageDraft: {},
   classTierDraft: {},
-  addGeoQuestionDraft: {q:'', opt0:'', opt1:'', opt2:'', opt3:'', correct:0}
+  addGeoQuestionDraft: {q:'', opt0:'', opt1:'', opt2:'', opt3:'', correct:0},
+  addKnowledgeDraft: {category:'', title:'', content:''}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -2264,6 +2303,28 @@ function renderCoachLoginModal(){
   </div>`;
 }
 
+function renderKnowledgeModal(){
+  const kb = state.config.knowledgeBase || [];
+  const cats = [];
+  kb.forEach(k=>{ if(!cats.includes(k.category)) cats.push(k.category); });
+  const sections = cats.map(cat=>{
+    const entries = kb.filter(k=>k.category===cat).map(k=>`
+      <div style="margin-bottom:12px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;">
+        <div style="font-weight:600;color:var(--accent-light);margin-bottom:4px;">${esc(k.title)}</div>
+        <div style="font-size:13px;line-height:1.8;white-space:pre-line;color:var(--text-chalk);">${esc(k.content)}</div>
+      </div>`).join('');
+    return `<h3 style="margin-top:16px;font-size:15px;color:var(--accent-green);">${esc(cat)}</h3>${entries}`;
+  }).join('');
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){state.showKnowledgeBase=false;render();}">
+    <div class="modal" style="max-width:480px;max-height:88vh;overflow-y:auto;">
+      <div class="flex-between"><h3 style="margin:0;">🩹 防護知識庫</h3><button class="btn secondary small" onclick="state.showKnowledgeBase=false;render();">✕ 關閉</button></div>
+      <div class="small-note" style="margin-top:8px;">運動傷害的冰敷／熱敷與熱身知識，練習前後可以參考。</div>
+      ${sections || '<div class="empty" style="margin-top:14px;">教練還沒有新增知識內容</div>'}
+    </div>
+  </div>`;
+}
+
 function renderGeoChallengeModal(){
   const q = state.geoChallengeQ;
   const sel = state.geoChallengeSelected;
@@ -2727,6 +2788,11 @@ function renderPlayerRole(){
     <div class="monster-name" style="font-size:15px;">試煉之路</div>
     <div class="small-note">${trialFull?('✅ 今天完成 10 題，答對 '+trialCorrectToday):(trialCountToday>0?('已測驗 '+trialCountToday+'/10 題，答對 '+trialCorrectToday):'每天最多測驗 10 題，純練習不計分')}</div>
   </div>`;
+  const knowledgeBaseTile = `<div class="panel battle-card" style="cursor:pointer;padding:14px;margin-top:0;" onclick="state.showKnowledgeBase=true;render();">
+    <div style="font-size:30px;">🩹</div>
+    <div class="monster-name" style="font-size:15px;">防護知識庫</div>
+    <div class="small-note">冰敷／熱敷／PEACE＆LOVE／熱身伸展知識</div>
+  </div>`;
 
   let questHint;
   if(!allDoneToday){
@@ -2866,6 +2932,7 @@ function renderPlayerRole(){
   ${state.showAvatarPicker ? renderAvatarPickerModal() : ''}
   ${state.showJournalForm ? renderJournalFormModal() : ''}
   ${state.showGeoChallenge ? renderGeoChallengeModal() : ''}
+  ${state.showKnowledgeBase ? renderKnowledgeModal() : ''}
   ${state.showTutorial ? renderTutorialModal() : ''}
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;align-items:start;">
@@ -2915,6 +2982,7 @@ function renderPlayerRole(){
       </div>
       ${trainingLogTile}
       ${trialPathTile}
+      ${knowledgeBaseTile}
     </div>
     ${state.showShopModal ? renderShopModal(shopRows) : ''}
   </div>
@@ -3318,6 +3386,25 @@ function renderCoachRole(){
       </div>
       <div style="margin-top:12px;"><button class="btn gold" onclick="addGeoQuestion()">新增題目</button></div>
     </div>`;
+  } else if(state.coachTab==='knowledgebase'){
+    const kb = state.config.knowledgeBase || [];
+    let rows = kb.map(k=>`<tr><td>${esc(k.category)}</td><td>${esc(k.title)}</td><td><button class="btn secondary small" onclick="deleteKnowledgeEntry('${k.id}')">刪除</button></td></tr>`).join('');
+    const d = state.addKnowledgeDraft;
+    body = `
+    <div class="small-note" style="margin-bottom:10px;">這裡是「防護知識庫」的內容，學生點方格可以直接瀏覽，純參考不計分。可以自己新增分類與條目。</div>
+    <table><thead><tr><th>分類</th><th>標題</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=3 class="empty">尚無內容</td></tr>'}</tbody></table>
+    <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
+      <h2 style="font-size:16px;">新增知識條目</h2>
+      <div class="row-flex" style="margin-top:6px;">
+        <div><label>分類</label><input type="text" value="${esc(d.category)}" oninput="state.addKnowledgeDraft.category=this.value" placeholder="例如：冰敷"></div>
+        <div><label>標題</label><input type="text" value="${esc(d.title)}" oninput="state.addKnowledgeDraft.title=this.value" placeholder="例如：冰敷的原理"></div>
+      </div>
+      <div style="margin-top:10px;">
+        <label>內容（每行一點，會保留換行）</label>
+        <textarea rows="5" oninput="state.addKnowledgeDraft.content=this.value" placeholder="降低身體溫度&#10;使血管收縮&#10;...">${esc(d.content)}</textarea>
+      </div>
+      <div style="margin-top:12px;"><button class="btn gold" onclick="addKnowledgeEntry()">新增條目</button></div>
+    </div>`;
   } else if(state.coachTab==='journals'){
     if(journalsCache.length===0 && state.players.length>0){ refreshJournals(); }
     const entries = journalsCache.map(e=>{
@@ -3468,6 +3555,7 @@ function renderCoachRole(){
       <div class="tab ${state.coachTab==='skills'?'active':''}" onclick="setCoachTab('skills')">技能設定</div>
       <div class="tab ${state.coachTab==='classtiers'?'active':''}" onclick="setCoachTab('classtiers')">職業設定</div>
       <div class="tab ${state.coachTab==='geoquestions'?'active':''}" onclick="setCoachTab('geoquestions')">試煉之路題庫</div>
+      <div class="tab ${state.coachTab==='knowledgebase'?'active':''}" onclick="setCoachTab('knowledgebase')">防護知識庫</div>
       <div class="tab ${state.coachTab==='journals'?'active':''}" onclick="setCoachTab('journals')">訓練日誌總覽</div>
       <div class="tab ${state.coachTab==='bonus'?'active':''}" onclick="setCoachTab('bonus')">額外任務</div>
       <div class="tab ${state.coachTab==='questions'?'active':''}" onclick="setCoachTab('questions')">題庫管理</div>
