@@ -19,7 +19,7 @@
     --font-body:'Rubik','Noto Sans TC',sans-serif;
     --font-mono:'JetBrains Mono',monospace;
   }
-  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Teko:wght@500;600;700&family=Rubik:wght@400;500;700&family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Press+Start+2P&family=Teko:wght@500;600;700&family=Rubik:wght@400;500;700&family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&display=swap');
   *{box-sizing:border-box;}
   body{
     margin:0;
@@ -135,6 +135,36 @@
   @keyframes npcFlip{0%{scale:1 1;}49%{scale:1 1;}50%{scale:-1 1;}99%{scale:-1 1;}100%{scale:1 1;}}
   @keyframes npcBounce{0%,100%{translate:0 0;}50%{translate:0 -4px;}}
   @keyframes npcBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+
+  /* ===== 新手先發指南 ===== */
+  .guide-hero{position:relative;text-align:center;padding:26px 10px 20px;border-bottom:2px solid var(--accent-light);margin:-24px -24px 18px;background:radial-gradient(ellipse 500px 260px at 50% -10%, rgba(255,209,102,0.14), transparent 65%);}
+  .guide-diamond{width:96px;height:96px;margin:0 auto 10px;}
+  .guide-diamond svg{width:100%;height:100%;filter:drop-shadow(0 4px 12px rgba(255,209,102,0.35));}
+  .guide-eyebrow{font-family:var(--font-mono);font-weight:600;letter-spacing:4px;font-size:11px;color:var(--accent-light);text-transform:uppercase;}
+  .guide-hero h1{font-family:'Anton','Teko',sans-serif;font-size:28px;line-height:1.2;margin:8px 0 4px;color:var(--text-chalk);letter-spacing:0.5px;}
+  .guide-hero h1 span{color:var(--accent-light);}
+  .guide-hero .sub{font-size:13px;color:var(--text-dim);max-width:340px;margin:6px auto 0;line-height:1.7;}
+  .guide-stitch{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;color:var(--accent-red);font-family:var(--font-mono);font-size:10px;letter-spacing:2px;}
+  .guide-stitch::before,.guide-stitch::after{content:'';flex:1;max-width:50px;height:2px;background:repeating-linear-gradient(90deg, var(--accent-red) 0 5px, transparent 5px 10px);}
+  .guide-card{display:flex;gap:12px;background:var(--bg-panel-2);border:1px solid var(--line);border-left:4px solid var(--accent-light);border-radius:10px;padding:14px;margin:12px 0;}
+  .guide-num{flex-shrink:0;width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 32% 28%, #fff5cc, var(--accent-light) 55%, #c99a1f 100%);display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--bg-deep);font-family:'Anton',sans-serif;box-shadow:0 3px 8px rgba(0,0,0,0.35);}
+  .guide-num b{font-size:17px;line-height:1;}
+  .guide-num i{font-style:normal;font-size:7px;letter-spacing:1px;font-family:var(--font-body);font-weight:700;margin-top:1px;}
+  .guide-card-body{flex:1;min-width:0;}
+  .guide-card-body .tag{display:inline-block;font-size:10px;color:var(--accent-green);font-weight:700;letter-spacing:1px;margin-bottom:3px;}
+  .guide-card-body h3{font-size:15px;color:var(--text-chalk);margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+  .guide-card-body p{font-size:12.5px;line-height:1.8;color:var(--text-dim);}
+  .guide-card-body p b{color:var(--accent-light);}
+  .guide-warn{margin-top:6px;font-size:11px;color:var(--accent-red);background:rgba(228,87,46,0.1);border:1px solid rgba(228,87,46,0.3);border-radius:6px;padding:5px 8px;}
+  .guide-economy{margin:20px 0 4px;padding:16px;border-radius:10px;background:linear-gradient(135deg, rgba(255,209,102,0.12), rgba(42,157,143,0.08));border:1px solid var(--line);text-align:center;}
+  .guide-economy h3{font-family:'Anton','Teko',sans-serif;font-size:16px;margin-bottom:10px;color:var(--text-chalk);}
+  .guide-eco-row{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;}
+  .guide-eco-item{min-width:90px;}
+  .guide-eco-item .val{font-family:'Anton',sans-serif;font-size:24px;color:var(--accent-light);}
+  .guide-eco-item .lbl{font-size:10px;color:var(--text-dim);margin-top:2px;line-height:1.5;}
+  .guide-closing{text-align:center;margin-top:26px;padding-top:16px;border-top:1px dashed var(--line);}
+  .guide-closing .quote{font-size:13px;color:var(--accent-light);line-height:1.8;margin-bottom:6px;}
+  .guide-closing .small{font-size:11px;color:var(--text-dim);}
   @keyframes shake{
     0%,100%{transform:translate(0,0) rotate(0);}
     20%{transform:translate(-6px,2px) rotate(-4deg);}
@@ -2701,22 +2731,64 @@ function renderSkillDetailModal(){
 }
 
 function renderTutorialModal(){
-  const step = TUTORIAL_STEPS[state.tutorialStep];
-  const isLast = state.tutorialStep===TUTORIAL_STEPS.length-1;
-  const dots = TUTORIAL_STEPS.map((s,i)=>`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 4px;background:${i===state.tutorialStep?'var(--accent-light)':'var(--line)'};"></span>`).join('');
+  const steps = [
+    {icon:'🗡️', tag:'STEP 01・建立角色', title:'選角上場', body:'第一次進來，先輸入<b>暱稱／ID</b>和<b>本名</b>，從<b>劍士、弓箭手、法師</b>三個職業中選一個。可以幫角色設一組 <b>4 位數密碼</b>，保護自己的資料不被別人亂動。', warn:'職業選好之後不能自己更改，請仔細考慮再選！'},
+    {icon:'📋', tag:'STEP 02・每日訓練', title:'修練之路', body:'把教練指定的練習項目打勾，送出後獲得 <b>⚡能量</b> 和 <b>💰點數</b>。有些項目需要上傳照片或影片證明，教練會幫你審核。'},
+    {icon:'⚔️', tag:'STEP 03・迎戰敵人', title:'揮棒迎擊', body:'用能量挑戰全隊共同的 <b>Boss</b>。答對問題就能揮棒造成傷害，答錯就揮棒落空。大家一起打倒 Boss 後，會出現血量更高的新敵人！'},
+    {icon:'💥', tag:'STEP 04・大絕招', title:'必殺技量表', body:'每次答對，必殺技量表就會累積。集滿 <b>100</b> 之後，隨時可以發動必殺技，對 Boss 造成大量傷害，不用再回答問題！'},
+    {icon:'🧠', tag:'STEP 05・成長之路', title:'技能與職業轉職', body:'等級提升會自動解鎖被動與主動技能。角色在 <b>Lv.15</b> 和 <b>Lv.30</b> 還會自動轉職，變成更強的稱號，被動能力也會跟著升級！'},
+    {icon:'🏪', tag:'STEP 06・兌換獎勵', title:'福利社', body:'把訓練賺到的 <b>💰點數</b> 拿去福利社兌換獎勵，兌換後要跟教練當面領取，領取狀態由教練在後台確認。'},
+    {icon:'📖', tag:'STEP 07・每日補給站', title:'訓練日誌 ・ 🗺️ 試煉之路', body:'<b>訓練日誌</b>：線上填寫這週的狀況與目標，不用拍照。<br><b>試煉之路</b>：每天最多測驗 10 題，純粹練習用，答對答錯都不影響能量點數。'},
+    {icon:'🩹', tag:'STEP 08・隨時複習', title:'防護知識庫 ・ 📜 隊規', body:'受傷冰敷熱敷怎麼選、熱身該怎麼做，還有球隊的核心精神與紀律規範，都收在這兩個方格裡，隨時可以點開來看。'}
+  ];
+  const cards = steps.map((s,i)=>`
+    <div class="guide-card">
+      <div class="guide-num"><b>${i+1}</b><i>番</i></div>
+      <div class="guide-card-body">
+        <div class="tag">${esc(s.tag)}</div>
+        <h3><span>${s.icon}</span>${s.title}</h3>
+        <p>${s.body}</p>
+        ${s.warn?`<div class="guide-warn">⚠️ ${esc(s.warn)}</div>`:''}
+      </div>
+    </div>`).join('');
   return `
-  <div class="modal-bg">
-    <div class="modal" style="max-width:460px;width:92vw;text-align:center;padding:28px 22px;">
-      <div style="font-size:72px;margin-bottom:10px;">${step.emoji}</div>
-      <h3 style="margin-bottom:12px;font-size:24px;">${esc(step.title)}</h3>
-      <p style="font-size:17px;line-height:1.8;color:var(--text-chalk);">${esc(step.body)}</p>
-      <div style="margin:20px 0;">${dots}</div>
-      <div style="display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;">
-        <button class="btn secondary" style="font-size:16px;padding:14px 20px;" onclick="closeTutorial()">跳過</button>
-        <div style="display:flex;gap:10px;flex:1;justify-content:flex-end;">
-          ${state.tutorialStep>0 ? '<button class="btn secondary" style="font-size:16px;padding:14px 20px;" onclick="prevTutorialStep()">上一步</button>' : ''}
-          <button class="btn gold" style="font-size:16px;padding:14px 24px;" onclick="nextTutorialStep()">${isLast?'開始冒險！':'下一步'}</button>
+  <div class="modal-bg" onclick="if(event.target===this) closeTutorial()">
+    <div class="modal" style="max-width:480px;max-height:90vh;overflow-y:auto;padding:0 24px 24px;">
+      <div class="guide-hero">
+        <div class="guide-diamond">
+          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <rect x="30" y="30" width="140" height="140" fill="none" stroke="#FFD166" stroke-width="4" transform="rotate(45 100 100)" opacity="0.9"/>
+            <circle cx="100" cy="100" r="4" fill="#F2EFE9"/>
+            <circle cx="100" cy="34" r="6" fill="#F2EFE9"/>
+            <circle cx="166" cy="100" r="6" fill="#F2EFE9"/>
+            <circle cx="100" cy="166" r="6" fill="#F2EFE9"/>
+            <circle cx="34" cy="100" r="6" fill="#F2EFE9"/>
+          </svg>
         </div>
+        <div class="guide-eyebrow">Starting Lineup Guide</div>
+        <h1>訓練競技場<br><span>新手先發指南</span></h1>
+        <p class="sub">每天完成訓練，就是你的「先發打席」。照著這 8 個打序上場，一步步升級成隊上的主力！</p>
+        <div class="guide-stitch">PLAY BALL</div>
+      </div>
+
+      ${cards}
+
+      <div class="guide-economy">
+        <h3>⚾ 兩種資源，記清楚</h3>
+        <div class="guide-eco-row">
+          <div class="guide-eco-item"><div class="val">⚡</div><div class="lbl">能量<br>訓練賺到・攻擊消耗</div></div>
+          <div class="guide-eco-item"><div class="val">💰</div><div class="lbl">點數<br>訓練＋答對賺到<br>福利社花費</div></div>
+          <div class="guide-eco-item"><div class="val">💥</div><div class="lbl">必殺技量表<br>答對累積・滿了發動</div></div>
+        </div>
+      </div>
+
+      <div class="guide-closing">
+        <div class="quote">「紀律造就習慣，習慣成就品格；品格決定未來。」</div>
+        <div class="small">東勢國中棒球隊・訓練競技場</div>
+      </div>
+
+      <div style="margin-top:18px;text-align:center;">
+        <button class="btn gold" style="font-size:16px;padding:14px 32px;" onclick="closeTutorial()">開始冒險！</button>
       </div>
     </div>
   </div>`;
@@ -3085,12 +3157,20 @@ function renderPlayerRole(){
     </div>`).join('') || '<div class="empty">物品欄是空的，去商店兌換點東西吧！</div>';
 
   return `
+  <div class="panel" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:linear-gradient(135deg, rgba(255,209,102,0.16), rgba(42,157,143,0.08));border-color:var(--accent-light);" onclick="openTutorial()">
+    <div style="font-size:26px;">📖</div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);letter-spacing:0.5px;">新手先發指南</div>
+      <div class="small-note">第一次來嗎？點這裡看完整的 8 步驟上場說明</div>
+    </div>
+    <div style="font-size:18px;color:var(--accent-light);">→</div>
+  </div>
+
   <div class="panel" style="background:linear-gradient(135deg, rgba(255,209,102,0.14), rgba(228,87,46,0.08)); border-color:var(--accent-light);">
     <div class="flex-between" style="margin-bottom:6px;">
       <div style="font-family:var(--font-display);font-size:15px;color:var(--accent-light);letter-spacing:0.5px;">🧭 現在該做什麼？</div>
       <div style="display:flex;gap:8px;">
         <button class="btn secondary small" onclick="openPinSettings()">🔒 密碼</button>
-        <button class="btn gold" style="font-size:13px;padding:8px 12px;" onclick="openTutorial()">❓ 教學</button>
         <button class="btn secondary small" onclick="backToPicker()">切換球員</button>
       </div>
     </div>
