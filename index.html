@@ -138,6 +138,7 @@
   .arena-hotspot{position:absolute;cursor:pointer;display:flex;align-items:flex-end;justify-content:center;border-radius:8px;transition:background .15s, box-shadow .15s;padding-bottom:4px;}
   .arena-hotspot:hover{background:rgba(255,209,102,0.12);box-shadow:inset 0 0 0 2px rgba(255,209,102,0.55);}
   .arena-hotspot .lbl{font-size:9px;color:#fff;background:rgba(11,22,38,0.85);padding:3px 7px;border-radius:14px;font-weight:600;border:1px solid rgba(255,209,102,0.6);box-shadow:0 2px 6px rgba(0,0,0,0.4);white-space:nowrap;}
+  .arena-center-panel{position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);width:84%;max-width:300px;background:rgba(11,22,38,0.74);backdrop-filter:blur(2px);border-radius:14px;padding:12px 14px 14px;border:1px solid rgba(255,209,102,0.35);box-shadow:0 8px 24px rgba(0,0,0,0.5);text-align:center;z-index:4;}
   .npc-sprite-img{width:64px;height:64px;image-rendering:pixelated;}
   .npc-bubble{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:8px;background:#0b1220;border:2px solid var(--accent-light);color:var(--accent-light);font-family:'Press Start 2P',var(--font-mono),monospace;font-size:8px;line-height:1.7;padding:6px 8px;white-space:nowrap;box-shadow:2px 2px 0 rgba(0,0,0,0.5);z-index:2;}
   .npc-bubble::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--accent-light);}
@@ -2744,40 +2745,39 @@ function renderBattleModal(){
   if(leaderboardCache.length===0 && state.players.length>0){ refreshLeaderboard(); }
   return `
   <div class="modal-bg" onclick="if(event.target===this){state.showBattleModal=false;render();}">
-    <div class="modal battle-card" style="max-width:460px;">
-      <div style="text-align:right;margin-bottom:-6px;">
+    <div class="modal battle-card" style="max-width:460px;padding:14px;">
+      <div style="text-align:right;margin-bottom:6px;">
         <button class="btn secondary small" onclick="state.showBattleModal=false;render();">✕ 關閉</button>
       </div>
-      <div class="arena-scene">
-        <div class="arena-hotspot" style="left:2%;top:2%;width:30%;height:20%;" onclick="state.showLeaderboard=true;render();" title="本日排名">
+      <div class="arena-scene" style="height:auto;aspect-ratio:1/1;">
+        <div class="arena-hotspot" style="left:2%;top:2%;width:30%;height:16%;" onclick="state.showLeaderboard=true;render();" title="本日排名">
           <div class="lbl">🏆 本日排名</div>
         </div>
-        <div class="arena-hotspot" style="left:4%;bottom:2%;width:26%;height:16%;" onclick="state.showShopModal=true;state.showBattleModal=false;render();" title="競技場商店">
+        <div class="arena-hotspot" style="left:4%;bottom:2%;width:26%;height:14%;" onclick="state.showShopModal=true;state.showBattleModal=false;render();" title="競技場商店">
           <div class="lbl">🏪 競技場商店</div>
         </div>
-        <div class="arena-hotspot" style="right:4%;bottom:2%;width:26%;height:16%;" onclick="state.showBonusTasksModal=true;render();" title="任務公告">
+        <div class="arena-hotspot" style="right:4%;bottom:2%;width:26%;height:14%;" onclick="state.showBonusTasksModal=true;render();" title="任務公告">
           <div class="lbl">📜 任務公告</div>
         </div>
-      </div>
-      ${monsterVisualHtml(boss)}
-      <div class="monster-name">${esc(boss.name)}（Boss #${boss.bossNumber}）</div>
-      <div class="small-note" style="font-style:italic;">${esc(boss.quote||'「膽敢挑戰本座？」')}</div>
-      <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
-      <div class="hp-text">全隊共同 HP ${boss.hp} / ${boss.maxHp} ・ 你的答對率 ${acc}%</div>
-      <div class="energy-row">可用能量 <b>${p.energy}</b> ⚡ ・ 每次攻擊消耗 ${attackCost} 點</div>
-      ${p.activeBuff ? `<div class="small-note" style="margin-top:8px;color:var(--accent-light);">⚡ 技能「${esc(p.activeBuff.name)}」已啟動，下一次攻擊生效</div>` : ''}
-      <div style="margin-top:16px;">
-        <button class="btn" ${p.energy<attackCost?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
-      </div>
-      <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);">
-        <div class="small-note" style="display:flex;justify-content:space-between;">
-          <span>💥 必殺技量表</span>
-          <span>${p.ultimateGauge||0} / 100</span>
+        <div class="arena-center-panel">
+          <div style="transform:scale(0.8);">${monsterVisualHtml(boss)}</div>
+          <div class="monster-name" style="font-size:15px;margin-top:-6px;">${esc(boss.name)}（Boss #${boss.bossNumber}）</div>
+          <div class="small-note" style="font-style:italic;font-size:11px;">${esc(boss.quote||'「膽敢挑戰本座？」')}</div>
+          <div class="hp-bar-outer" style="height:9px;margin:5px auto;max-width:260px;"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
+          <div class="hp-text" style="font-size:11px;">HP ${boss.hp} / ${boss.maxHp} ・ 答對率 ${acc}%</div>
+          <div class="energy-row" style="font-size:11px;">⚡${p.energy} 可用 ・ 每次消耗 ${attackCost}</div>
+          ${p.activeBuff ? `<div class="small-note" style="margin-top:4px;color:var(--accent-light);font-size:10px;">⚡ 技能「${esc(p.activeBuff.name)}」已啟動</div>` : ''}
+          <button class="btn" style="margin-top:8px;padding:9px;font-size:13px;" ${p.energy<attackCost?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
+          <div style="margin-top:8px;">
+            <div class="small-note" style="display:flex;justify-content:space-between;font-size:10px;">
+              <span>💥 必殺技</span><span>${p.ultimateGauge||0} / 100</span>
+            </div>
+            <div class="hp-bar-outer" style="height:7px;"><div class="hp-bar-inner" style="width:${p.ultimateGauge||0}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);${(p.ultimateGauge||0)>=100?'animation:bossPulse 1.2s ease-in-out infinite;':''}"></div></div>
+            <button class="btn" style="margin-top:6px;width:100%;padding:8px;font-size:12px;${(p.ultimateGauge||0)>=100?'background:linear-gradient(90deg,#ff6b6b,#ffd166);color:#3a1400;':''}" ${(p.ultimateGauge||0)<100?'disabled':''} onclick="useUltimate()">💥 發動必殺技${(p.ultimateGauge||0)>=100?'！':''}</button>
+          </div>
         </div>
-        <div class="hp-bar-outer" style="height:10px;"><div class="hp-bar-inner" style="width:${p.ultimateGauge||0}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);${(p.ultimateGauge||0)>=100?'animation:bossPulse 1.2s ease-in-out infinite;':''}"></div></div>
-        <button class="btn" style="margin-top:10px;width:100%;${(p.ultimateGauge||0)>=100?'background:linear-gradient(90deg,#ff6b6b,#ffd166);color:#3a1400;':''}" ${(p.ultimateGauge||0)<100?'disabled':''} onclick="useUltimate()">💥 發動必殺技${(p.ultimateGauge||0)>=100?'！':'（集滿才能用）'}</button>
       </div>
-      <div class="small-note" style="margin-top:10px;">這隻 Boss 是全隊共同的敵人，大家一起累積傷害，打倒後會出現血量更高的新 Boss！</div>
+      <div class="small-note" style="margin-top:8px;text-align:center;">這隻 Boss 是全隊共同的敵人，大家一起累積傷害，打倒後會出現血量更高的新 Boss！</div>
     </div>
   </div>
   ${state.showLeaderboard ? renderLeaderboardModal() : ''}
