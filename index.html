@@ -126,7 +126,12 @@
   .monster-emoji.shake{animation:shake .35s ease;}
   .boss-emoji{font-size:88px;filter:drop-shadow(0 0 28px rgba(228,87,46,0.7)) drop-shadow(0 0 10px rgba(255,80,20,0.5));animation:bossPulse 2.2s ease-in-out infinite;}
   @keyframes bossPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
-  .npc-plaza{position:relative;height:180px;overflow:hidden;border-radius:14px;background:linear-gradient(180deg, rgba(42,157,143,0.14), rgba(42,157,143,0.03));border:1px dashed var(--line);}
+  .npc-plaza{position:relative;height:180px;overflow:hidden;border-radius:14px;background:linear-gradient(180deg, rgba(11,22,38,0.9), rgba(42,157,143,0.05));border:1px dashed var(--line);perspective:500px;}
+  .lobby-floor{position:absolute;left:50%;bottom:-70px;width:180%;height:240px;transform:translateX(-50%) rotateX(58deg);transform-origin:bottom center;background-image:linear-gradient(90deg, rgba(255,209,102,0.10) 1px, transparent 1px),linear-gradient(0deg, rgba(255,209,102,0.10) 1px, transparent 1px);background-size:36px 36px;background-color:rgba(42,157,143,0.06);z-index:0;}
+  .lobby-counter{position:absolute;right:10px;bottom:8px;z-index:6;display:flex;flex-direction:column;align-items:center;cursor:pointer;text-align:center;width:76px;}
+  .lobby-counter .desk{width:66px;height:34px;background:linear-gradient(180deg, #d9a441, #a9761f);border:2px solid #7a5416;border-radius:6px 6px 3px 3px;position:relative;box-shadow:0 4px 8px rgba(0,0,0,0.4);}
+  .lobby-counter .desk::before{content:'🛎️';position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:16px;}
+  .lobby-counter .lbl{font-size:9px;color:var(--accent-light);margin-top:4px;line-height:1.4;font-weight:600;}
   .npc-walker{position:absolute;bottom:10px;width:76px;text-align:center;z-index:5;}
   .npc-sprite-img{width:64px;height:64px;image-rendering:pixelated;}
   .npc-bubble{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:8px;background:#0b1220;border:2px solid var(--accent-light);color:var(--accent-light);font-family:'Press Start 2P',var(--font-mono),monospace;font-size:8px;line-height:1.7;padding:6px 8px;white-space:nowrap;box-shadow:2px 2px 0 rgba(0,0,0,0.5);z-index:2;}
@@ -2909,9 +2914,10 @@ function renderPlayerRole(){
       </div>`;
     }).join('');
     let npcPlazaHtml = '';
+    let npcsInner = '';
     if((state.playerChips||[]).length){
       startNpcChat();
-      const npcs = state.playerChips.map((pc,i)=>{
+      npcsInner = state.playerChips.map((pc,i)=>{
         const ch = characterById(pc.avatarId);
         const chatting = state.npcChat && state.npcChat.index===i;
         const dur = (6 + (i*2.7)%6).toFixed(2);
@@ -2925,16 +2931,21 @@ function renderPlayerRole(){
           <div class="small-note" style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(pc.name)}</div>
         </div>`;
       }).join('');
-      npcPlazaHtml = `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);">
-        <div class="small-note" style="margin-bottom:8px;">🏘️ 大家都在這裡</div>
-        <div class="npc-plaza">
-          <div style="position:absolute;inset:0;background:${plazaNightTint()};pointer-events:none;z-index:1;transition:background 3s;"></div>
-          ${npcs}
-        </div>
-      </div>`;
     } else {
       stopNpcChat();
     }
+    npcPlazaHtml = `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);">
+      <div class="small-note" style="margin-bottom:8px;">🏘️ 訓練競技場大廳（45° 鳥瞰視角）</div>
+      <div class="npc-plaza">
+        <div class="lobby-floor"></div>
+        <div style="position:absolute;inset:0;background:${plazaNightTint()};pointer-events:none;z-index:1;transition:background 3s;"></div>
+        ${npcsInner || '<div class="small-note" style="position:absolute;left:12px;bottom:10px;z-index:5;">還沒有人報到，第一個到櫃台創角吧！</div>'}
+        <div class="lobby-counter" onclick="document.getElementById('create-panel').scrollIntoView({behavior:'smooth',block:'start'});">
+          <div class="desk"></div>
+          <div class="lbl">新生報到<br>創角櫃台</div>
+        </div>
+      </div>
+    </div>`;
     const starterIds = (state.config.starterCharacterIds && state.config.starterCharacterIds.length) ? state.config.starterCharacterIds : STARTER_CHARACTER_IDS;
     let avatarPickerHtml = CHARACTER_ROSTER.filter(c=>starterIds.includes(c.id)).map((c,ci)=>{
       const selected = state.newPlayerAvatarId===c.id;
@@ -2951,6 +2962,16 @@ function renderPlayerRole(){
       </div>`;
     }).join('');
     return `
+    <div class="panel" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:linear-gradient(135deg, rgba(255,209,102,0.16), rgba(42,157,143,0.08));border-color:var(--accent-light);" onclick="openTutorial()">
+      <div style="font-size:26px;">📖</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);letter-spacing:0.5px;">新手先發指南</div>
+        <div class="small-note">第一次來嗎？點這裡看完整的 8 步驟上場說明</div>
+      </div>
+      <div style="font-size:18px;color:var(--accent-light);">→</div>
+    </div>
+    ${state.showTutorial ? renderTutorialModal() : ''}
+
     <div class="panel" style="padding:10px 16px;display:flex;align-items:center;gap:12px;">
       <img src="${TEAM_PHOTO}" alt="球隊" style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;">
       <div style="min-width:0;">
@@ -2963,7 +2984,7 @@ function renderPlayerRole(){
       <div class="player-grid">${chips || '<div class="empty">還沒有任何球員，先在下方建立一位吧</div>'}</div>
       ${npcPlazaHtml}
     </div>
-    <div class="panel">
+    <div class="panel" id="create-panel">
       <h2><span class="eyebrow">Step 2</span>新球員？在這裡建立</h2>
       <div class="row-flex">
         <div>
