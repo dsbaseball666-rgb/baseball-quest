@@ -906,13 +906,13 @@ async function listPlayers(){
     return keys || [];
   }catch(e){ return []; }
 }
-function defaultPlayer(name, realName, avatarId){
+function defaultPlayer(name, realName, avatarId, pin){
   return {
     name, realName: realName||'', avatarId: avatarId || (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id) || null,
     level:1, energy:0, points:0, ultimateGauge:0,
     correct:0, wrong:0, streak:0, lastDate:null,
     log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false,
-    trialDate:null, trialCount:0, trialCorrect:0
+    trialDate:null, trialCount:0, trialCorrect:0, pin: pin || null
   };
 }
 function normalizePlayer(p){
@@ -933,6 +933,7 @@ function normalizePlayer(p){
   if(p.trialCount==null) p.trialCount = 0;
   if(p.trialCorrect==null) p.trialCorrect = 0;
   if(p.trialDate !== todayStr()){ p.trialDate = todayStr(); p.trialCount = 0; p.trialCorrect = 0; }
+  if(p.pin===undefined) p.pin = null;
   return p;
 }
 function characterById(id){
@@ -1378,6 +1379,11 @@ let state = {
   newPlayerName: '',
   newPlayerRealName: '',
   newPlayerAvatarId: null,
+  newPlayerPin: '',
+  pendingPlayerUnlock: null,
+  pinInputDraft: '',
+  showPinSettings: false,
+  pinSettingsDraft: {oldPin:'', newPin:'', newPin2:''},
   showAvatarPicker: false,
   showTutorial: false,
   showBattleModal: false,
@@ -1487,6 +1493,15 @@ async function selectPlayer(name){
   let p = await getPlayer(name);
   if(!p){ p = defaultPlayer(name); await savePlayer(p); }
   p = normalizePlayer(p);
+  if(p.pin){
+    state.pendingPlayerUnlock = name;
+    state.pinInputDraft = '';
+    render();
+    return;
+  }
+  await enterPlayer(name, p);
+}
+async function enterPlayer(name, p){
   state.currentPlayer = name;
   state.playerData = p;
   state.teamBoss = await getTeamBoss();
@@ -1497,6 +1512,20 @@ async function selectPlayer(name){
   }
   render();
 }
+async function submitPlayerPin(){
+  const name = state.pendingPlayerUnlock;
+  if(!name) return;
+  const p = normalizePlayer(await getPlayer(name));
+  if(!p || state.pinInputDraft !== p.pin){ showToast('密碼不對喔，再試一次'); state.pinInputDraft=''; render(); return; }
+  state.pendingPlayerUnlock = null;
+  state.pinInputDraft = '';
+  await enterPlayer(name, p);
+}
+function cancelPlayerPin(){
+  state.pendingPlayerUnlock = null;
+  state.pinInputDraft = '';
+  render();
+}
 
 async function createPlayer(){
   const name = state.newPlayerName.trim();
@@ -1505,14 +1534,39 @@ async function createPlayer(){
   if(!realName){ showToast('請填寫本名，這樣教練才知道是你喔'); return; }
   if(!state.newPlayerAvatarId){ showToast('請選一個你的角色'); return; }
   if(state.players.includes(name)){ showToast('這個暱稱／ID已經有人用了，換一個吧'); return; }
-  const p = defaultPlayer(name, realName, state.newPlayerAvatarId);
+  const pin = (state.newPlayerPin||'').trim();
+  if(pin && !/^\d{4}$/.test(pin)){ showToast('密碼請輸入 4 位數字，或留空不設密碼'); return; }
+  const p = defaultPlayer(name, realName, state.newPlayerAvatarId, pin || null);
   await savePlayer(p);
   state.players.push(name);
   state.newPlayerName = '';
   state.newPlayerRealName = '';
   state.newPlayerAvatarId = null;
-  await selectPlayer(name);
+  state.newPlayerPin = '';
+  await enterPlayer(name, normalizePlayer(p));
   loadPlayerChips();
+}
+function openPinSettings(){
+  state.showPinSettings = true;
+  state.pinSettingsDraft = {oldPin:'', newPin:'', newPin2:''};
+  render();
+}
+function closePinSettings(){
+  state.showPinSettings = false;
+  render();
+}
+async function submitPinSettings(){
+  const p = state.playerData;
+  const d = state.pinSettingsDraft;
+  if(p.pin && d.oldPin !== p.pin){ showToast('目前的密碼不對喔'); return; }
+  const newPin = (d.newPin||'').trim();
+  if(newPin && !/^\d{4}$/.test(newPin)){ showToast('新密碼請輸入 4 位數字，或留空表示不設密碼'); return; }
+  if(newPin !== (d.newPin2||'').trim()){ showToast('兩次輸入的新密碼不一樣喔'); return; }
+  p.pin = newPin || null;
+  await savePlayer(p);
+  state.showPinSettings = false;
+  showToast(newPin ? '密碼已更新！' : '密碼已移除');
+  render();
 }
 async function changeAvatar(avatarId){
   const p = state.playerData;
@@ -2097,6 +2151,17 @@ async function coachChangeAvatar(playerName, avatarId){
   }
   render();
 }
+async function coachResetPlayerPin(playerName){
+  const p = await getPlayer(playerName);
+  if(!p) return;
+  p.pin = null;
+  await savePlayer(p);
+  showToast('已清除「'+playerName+'」的密碼，學生可以自己重新設定');
+  if(state.viewingPlayer && state.viewingPlayer.name===playerName){
+    state.viewingPlayer = normalizePlayer(p);
+  }
+  render();
+}
 async function saveFormUrl(){
   const url = (state.formUrlDraft!==null && state.formUrlDraft!==''?state.formUrlDraft:(state.config.formUrl||'')).trim();
   const penalty = Number(state.penaltyDraft!==null && state.penaltyDraft!==''?state.penaltyDraft:(state.config.penaltyPoints!=null?state.config.penaltyPoints:30));
@@ -2295,6 +2360,9 @@ function render(){
   if(state.showCoachLogin){
     html += renderCoachLoginModal();
   }
+  if(state.pendingPlayerUnlock){
+    html += renderPlayerPinModal();
+  }
 
   if(state.toast){
     html += `<div class="toast">${esc(state.toast)}</div>`;
@@ -2338,6 +2406,42 @@ function renderCoachLoginModal(){
         <button class="btn secondary" onclick="closeCoachLogin()">取消</button>
         <button class="btn gold" onclick="submitCoachLogin()">${isFirstSetup?'設定並登入':'登入'}</button>
       </div>
+    </div>
+  </div>`;
+}
+
+function renderPinSettingsModal(){
+  const p = state.playerData;
+  const d = state.pinSettingsDraft;
+  return `
+  <div class="modal-bg" onclick="if(event.target===this) closePinSettings()">
+    <div class="modal" style="max-width:380px;">
+      <h3>🔒 角色密碼設定</h3>
+      <p class="small-note">${p.pin?'目前已經設定密碼，要更改的話請先輸入原本的密碼。':'目前還沒有設定密碼。設定後，別人選到你的角色時要輸入密碼才能進入。'}</p>
+      ${p.pin?`<div style="margin-top:10px;"><label>目前的密碼</label><input type="password" inputmode="numeric" maxlength="4" value="${esc(d.oldPin)}" oninput="state.pinSettingsDraft.oldPin=this.value.replace(/\\D/g,'').slice(0,4)" placeholder="●●●●"></div>`:''}
+      <div style="margin-top:10px;"><label>新密碼（4位數字，留空表示不設密碼）</label><input type="password" inputmode="numeric" maxlength="4" value="${esc(d.newPin)}" oninput="state.pinSettingsDraft.newPin=this.value.replace(/\\D/g,'').slice(0,4)" placeholder="●●●●"></div>
+      <div style="margin-top:10px;"><label>再輸入一次新密碼</label><input type="password" inputmode="numeric" maxlength="4" value="${esc(d.newPin2)}" oninput="state.pinSettingsDraft.newPin2=this.value.replace(/\\D/g,'').slice(0,4)" placeholder="●●●●"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn secondary" onclick="closePinSettings()">取消</button>
+        <button class="btn gold" onclick="submitPinSettings()">儲存</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderPlayerPinModal(){
+  return `
+  <div class="modal-bg" onclick="if(event.target===this) cancelPlayerPin()">
+    <div class="modal" style="max-width:360px;text-align:center;">
+      <div style="font-size:40px;">🔒</div>
+      <h3 style="margin-top:8px;">「${esc(state.pendingPlayerUnlock)}」已上鎖</h3>
+      <p class="small-note">請輸入這個角色的 4 位數密碼</p>
+      <input type="password" inputmode="numeric" maxlength="4" value="${esc(state.pinInputDraft)}" oninput="state.pinInputDraft=this.value.replace(/\\D/g,'').slice(0,4)" placeholder="●●●●" style="margin-top:10px;text-align:center;letter-spacing:8px;font-size:20px;" onkeydown="if(event.key==='Enter') submitPlayerPin()">
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn secondary" onclick="cancelPlayerPin()">取消</button>
+        <button class="btn gold" onclick="submitPlayerPin()">解鎖</button>
+      </div>
+      <div class="small-note" style="margin-top:10px;">忘記密碼了嗎？請找教練幫忙重設。</div>
     </div>
   </div>`;
 }
@@ -2666,6 +2770,10 @@ function renderPlayerLogModal(){
         目前職業：${esc(curChar.name)}（學生自己不能改，只有這裡教練能改）
         <select style="width:auto;max-width:140px;" onchange="coachChangeAvatar('${esc(p.name)}',this.value)">${avatarOptions}</select>
       </div>
+      <div class="small-note" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        🔒 角色密碼：${p.pin?'已設定':'未設定'}
+        ${p.pin?`<button class="btn secondary small" onclick="coachResetPlayerPin('${esc(p.name)}')">重設密碼（清除，讓學生可以重新設定）</button>`:''}
+      </div>
       <table><thead><tr><th>日期</th><th>項目</th><th>能量／點數</th><th>審核／證明</th></tr></thead>
       <tbody>${rows}</tbody></table>
       <h3 style="margin-top:18px;font-size:18px;">🎁 額外任務紀錄</h3>
@@ -2793,6 +2901,10 @@ function renderPlayerRole(){
         <div>
           <label>本名（一定要填，教練才知道是你，兌獎才對得到人）</label>
           <input type="text" value="${esc(state.newPlayerRealName)}" oninput="state.newPlayerRealName=this.value" placeholder="例如：王小明">
+        </div>
+        <div>
+          <label>🔒 密碼（選填，4位數字，避免別人亂動你的角色）</label>
+          <input type="password" inputmode="numeric" maxlength="4" value="${esc(state.newPlayerPin)}" oninput="state.newPlayerPin=this.value.replace(/\\D/g,'').slice(0,4)" placeholder="例如：1234，不設就留空">
         </div>
       </div>
       <div style="margin-top:16px;">
@@ -2977,6 +3089,7 @@ function renderPlayerRole(){
     <div class="flex-between" style="margin-bottom:6px;">
       <div style="font-family:var(--font-display);font-size:15px;color:var(--accent-light);letter-spacing:0.5px;">🧭 現在該做什麼？</div>
       <div style="display:flex;gap:8px;">
+        <button class="btn secondary small" onclick="openPinSettings()">🔒 密碼</button>
         <button class="btn gold" style="font-size:13px;padding:8px 12px;" onclick="openTutorial()">❓ 教學</button>
         <button class="btn secondary small" onclick="backToPicker()">切換球員</button>
       </div>
@@ -2988,6 +3101,7 @@ function renderPlayerRole(){
   </div>
   ${state.showAvatarPicker ? renderAvatarPickerModal() : ''}
   ${state.showJournalForm ? renderJournalFormModal() : ''}
+  ${state.showPinSettings ? renderPinSettingsModal() : ''}
   ${state.showGeoChallenge ? renderGeoChallengeModal() : ''}
   ${state.showKnowledgeBase ? renderKnowledgeModal() : ''}
   ${state.showTeamRules ? renderTeamRulesModal() : ''}
