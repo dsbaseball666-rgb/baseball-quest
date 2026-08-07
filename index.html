@@ -138,7 +138,8 @@
   .arena-hotspot{position:absolute;cursor:pointer;display:flex;align-items:flex-end;justify-content:center;border-radius:8px;transition:background .15s, box-shadow .15s;padding-bottom:4px;}
   .arena-hotspot:hover{background:rgba(255,209,102,0.12);box-shadow:inset 0 0 0 2px rgba(255,209,102,0.55);}
   .arena-hotspot .lbl{font-size:9px;color:#fff;background:rgba(11,22,38,0.85);padding:3px 7px;border-radius:14px;font-weight:600;border:1px solid rgba(255,209,102,0.6);box-shadow:0 2px 6px rgba(0,0,0,0.4);white-space:nowrap;}
-  .arena-center-panel{position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);width:84%;max-width:300px;background:rgba(11,22,38,0.74);backdrop-filter:blur(2px);border-radius:14px;padding:12px 14px 14px;border:1px solid rgba(255,209,102,0.35);box-shadow:0 8px 24px rgba(0,0,0,0.5);text-align:center;z-index:4;}
+  .arena-boss-zone{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);text-align:center;z-index:4;}
+  .arena-team-row{position:absolute;left:0;right:0;bottom:20%;display:flex;justify-content:center;gap:8px;flex-wrap:wrap;padding:0 10%;z-index:4;}
   .npc-sprite-img{width:64px;height:64px;image-rendering:pixelated;}
   .npc-bubble{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:8px;background:#0b1220;border:2px solid var(--accent-light);color:var(--accent-light);font-family:'Press Start 2P',var(--font-mono),monospace;font-size:8px;line-height:1.7;padding:6px 8px;white-space:nowrap;box-shadow:2px 2px 0 rgba(0,0,0,0.5);z-index:2;}
   .npc-bubble::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--accent-light);}
@@ -2445,9 +2446,6 @@ function render(){
   if(state.toast){
     html += `<div class="toast">${esc(state.toast)}</div>`;
   }
-  if(state.quiz){
-    html += renderQuizModal();
-  }
   if(state.viewingPlayer){
     html += renderPlayerLogModal();
   }
@@ -2741,13 +2739,35 @@ function renderBattleModal(){
   const boss = state.teamBoss || {name:'烈焰黑龍', emoji:'🐉', quote:'「膽敢挑戰本座？」', hp:0, maxHp:1, bossNumber:1};
   const attackCost = state.config.attackEnergyCost!=null ? state.config.attackEnergyCost : 1;
   const hpPct = Math.max(0, Math.round(boss.hp/boss.maxHp*100));
-  const acc = (p.correct+p.wrong)>0 ? Math.round(p.correct/(p.correct+p.wrong)*100) : 0;
   if(leaderboardCache.length===0 && state.players.length>0){ refreshLeaderboard(); }
+
+  const chips = (state.playerChips||[]).slice(0,8);
+  const teamRow = chips.map(pc=>{
+    const ch = characterById(pc.avatarId);
+    const isMe = pc.name===state.currentPlayer;
+    return `<div style="text-align:center;flex-shrink:0;${isMe?'filter:drop-shadow(0 0 6px rgba(255,209,102,0.9));':''}">
+      <img src="${ch.image}" style="width:34px;height:34px;image-rendering:pixelated;">
+    </div>`;
+  }).join('');
+
+  const quizHtml = state.quiz ? renderQuizInline() : `
+      <div class="energy-row">⚡${p.energy} 可用能量 ・ 每次攻擊消耗 ${attackCost} 點</div>
+      ${p.activeBuff ? `<div class="small-note" style="margin-top:4px;color:var(--accent-light);">⚡ 技能「${esc(p.activeBuff.name)}」已啟動，下一次攻擊生效</div>` : ''}
+      <button class="btn" style="width:100%;margin-top:10px;padding:12px;font-size:15px;" ${p.energy<attackCost?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);">
+        <div class="small-note" style="display:flex;justify-content:space-between;">
+          <span>💥 必殺技量表</span><span>${p.ultimateGauge||0} / 100</span>
+        </div>
+        <div class="hp-bar-outer" style="height:9px;"><div class="hp-bar-inner" style="width:${p.ultimateGauge||0}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);${(p.ultimateGauge||0)>=100?'animation:bossPulse 1.2s ease-in-out infinite;':''}"></div></div>
+        <button class="btn" style="margin-top:8px;width:100%;padding:10px;${(p.ultimateGauge||0)>=100?'background:linear-gradient(90deg,#ff6b6b,#ffd166);color:#3a1400;':''}" ${(p.ultimateGauge||0)<100?'disabled':''} onclick="useUltimate()">💥 發動必殺技${(p.ultimateGauge||0)>=100?'！':'（集滿才能用）'}</button>
+      </div>
+      <div class="small-note" style="margin-top:10px;text-align:center;">這隻 Boss 是全隊共同的敵人，大家一起累積傷害，打倒後會出現血量更高的新 Boss！</div>`;
+
   return `
-  <div class="modal-bg" onclick="if(event.target===this){state.showBattleModal=false;render();}">
+  <div class="modal-bg" onclick="if(event.target===this && !state.quiz){state.showBattleModal=false;render();}">
     <div class="modal battle-card" style="max-width:460px;padding:14px;">
       <div style="text-align:right;margin-bottom:6px;">
-        <button class="btn secondary small" onclick="state.showBattleModal=false;render();">✕ 關閉</button>
+        ${state.quiz ? '' : '<button class="btn secondary small" onclick="state.showBattleModal=false;render();">✕ 關閉</button>'}
       </div>
       <div class="arena-scene" style="height:auto;aspect-ratio:1/1;">
         <div class="arena-hotspot" style="left:2%;top:2%;width:30%;height:16%;" onclick="state.showLeaderboard=true;render();" title="本日排名">
@@ -2759,29 +2779,79 @@ function renderBattleModal(){
         <div class="arena-hotspot" style="right:4%;bottom:2%;width:26%;height:14%;" onclick="state.showBonusTasksModal=true;render();" title="任務公告">
           <div class="lbl">📜 任務公告</div>
         </div>
-        <div class="arena-center-panel">
-          <div style="transform:scale(0.8);">${monsterVisualHtml(boss)}</div>
-          <div class="monster-name" style="font-size:15px;margin-top:-6px;">${esc(boss.name)}（Boss #${boss.bossNumber}）</div>
-          <div class="small-note" style="font-style:italic;font-size:11px;">${esc(boss.quote||'「膽敢挑戰本座？」')}</div>
-          <div class="hp-bar-outer" style="height:9px;margin:5px auto;max-width:260px;"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
-          <div class="hp-text" style="font-size:11px;">HP ${boss.hp} / ${boss.maxHp} ・ 答對率 ${acc}%</div>
-          <div class="energy-row" style="font-size:11px;">⚡${p.energy} 可用 ・ 每次消耗 ${attackCost}</div>
-          ${p.activeBuff ? `<div class="small-note" style="margin-top:4px;color:var(--accent-light);font-size:10px;">⚡ 技能「${esc(p.activeBuff.name)}」已啟動</div>` : ''}
-          <button class="btn" style="margin-top:8px;padding:9px;font-size:13px;" ${p.energy<attackCost?'disabled':''} onclick="openAttack()">⚔️ 揮棒迎擊！</button>
-          <div style="margin-top:8px;">
-            <div class="small-note" style="display:flex;justify-content:space-between;font-size:10px;">
-              <span>💥 必殺技</span><span>${p.ultimateGauge||0} / 100</span>
-            </div>
-            <div class="hp-bar-outer" style="height:7px;"><div class="hp-bar-inner" style="width:${p.ultimateGauge||0}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);${(p.ultimateGauge||0)>=100?'animation:bossPulse 1.2s ease-in-out infinite;':''}"></div></div>
-            <button class="btn" style="margin-top:6px;width:100%;padding:8px;font-size:12px;${(p.ultimateGauge||0)>=100?'background:linear-gradient(90deg,#ff6b6b,#ffd166);color:#3a1400;':''}" ${(p.ultimateGauge||0)<100?'disabled':''} onclick="useUltimate()">💥 發動必殺技${(p.ultimateGauge||0)>=100?'！':''}</button>
-          </div>
+        <div class="arena-boss-zone">
+          <div style="transform:scale(0.85);">${monsterVisualHtml(boss)}</div>
+          <div class="monster-name" style="font-size:13px;margin-top:-8px;text-shadow:0 2px 6px #000;">${esc(boss.name)}（#${boss.bossNumber}）</div>
+          <div class="hp-bar-outer" style="height:8px;width:160px;margin:3px auto 0;"><div class="hp-bar-inner" style="width:${hpPct}%;"></div></div>
+          <div class="small-note" style="font-size:9px;text-shadow:0 1px 3px #000;">HP ${boss.hp}/${boss.maxHp}</div>
         </div>
+        <div class="arena-team-row">${teamRow || ''}</div>
       </div>
-      <div class="small-note" style="margin-top:8px;text-align:center;">這隻 Boss 是全隊共同的敵人，大家一起累積傷害，打倒後會出現血量更高的新 Boss！</div>
+      <div class="battle-controls" style="margin-top:10px;">
+        ${quizHtml}
+      </div>
     </div>
   </div>
   ${state.showLeaderboard ? renderLeaderboardModal() : ''}
   ${state.showBonusTasksModal ? renderBonusTasksModal() : ''}`;
+}
+function renderQuizInline(){
+  const q = state.quiz.q;
+  const sel = state.quiz.selectedIdx;
+  const curBoss = state.teamBoss || {};
+  const bossMiniVisual = curBoss.image
+    ? `<img src="${curBoss.image}" style="width:40px;height:40px;image-rendering:pixelated;">`
+    : `${esc(curBoss.emoji||'🐉')}`;
+  let opts = q.options.map((o,i)=>{
+    let cls='opt-btn';
+    if(sel!==null){
+      if(i===q.correct) cls+=' correct';
+      else if(i===sel) cls+=' wrong';
+    }
+    return `<button class="${cls}" ${sel!==null?'disabled':''} onclick="answerQuiz(${i})">${esc(o)}</button>`;
+  }).join('');
+  let resultLine = '';
+  let battleHtml = '';
+  let reactionHtml = '';
+  if(sel!==null){
+    const isCorrect = state.quiz.result==='correct';
+    const dodged = !!state.quiz.dodged;
+    let battleClass, dmgText, lineHtml;
+    if(isCorrect && !dodged){
+      battleClass = 'hit'; dmgText = '-'+(state.quiz.damage||20);
+      lineHtml = '<div class="small-note" style="color:var(--accent-green);">✔ 完美命中！看穿弱點造成傷害！</div>';
+    } else if(isCorrect && dodged){
+      battleClass = 'dodge'; dmgText = '閃避！';
+      lineHtml = '<div class="small-note" style="color:var(--accent-light);">💨 看穿破綻，但被對方閃過了！</div>';
+    } else {
+      battleClass = 'miss'; dmgText = '';
+      lineHtml = '<div class="small-note" style="color:var(--accent-red);">✘ 揮棒落空，沒有出手機會</div>';
+    }
+    resultLine = lineHtml;
+    battleHtml = `
+    <div class="mini-battle ${battleClass}">
+      <div class="attacker">🏏</div>
+      <div class="impact">${battleClass==='hit'?'💥':(battleClass==='dodge'?'💨':'💦')}</div>
+      ${dmgText?`<div class="dmg-float">${dmgText}</div>`:''}
+      <div class="boss-target">${bossMiniVisual}</div>
+    </div>`;
+    if(state.quiz.monsterReaction){
+      reactionHtml = `<div style="margin-top:8px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--text-dim);">
+        <span style="color:var(--accent-red);font-weight:600;">${esc(curBoss.name||'敵人')} ${esc(state.quiz.monsterReaction.action)}：</span>
+        ${esc(state.quiz.monsterReaction.line)}
+      </div>`;
+    }
+  }
+  return `
+    <div class="flex-between" style="align-items:flex-start;">
+      <h3 style="margin:0;font-size:16px;">⚔️ 攻擊挑戰</h3>
+      ${sel===null ? '<button class="btn secondary small" onclick="closeQuiz()">✕ 稍後再攻擊</button>' : ''}
+    </div>
+    <p style="font-size:14px;line-height:1.5;margin-top:8px;">${esc(q.q)}</p>
+    ${opts}
+    ${battleHtml}
+    ${resultLine}
+    ${reactionHtml}`;
 }
 function renderLeaderboardModal(){
   const rows = leaderboardCache.map((pl,i)=>{
@@ -3438,71 +3508,6 @@ function renderShopModal(shopRows){
   </div>`;
 }
 
-function renderQuizModal(){
-  const q = state.quiz.q;
-  const sel = state.quiz.selectedIdx;
-  const curBoss = state.teamBoss || {};
-  const bossMiniVisual = curBoss.image
-    ? `<img src="${curBoss.image}" style="width:46px;height:46px;image-rendering:pixelated;">`
-    : `${esc(curBoss.emoji||'🐉')}`;
-  let opts = q.options.map((o,i)=>{
-    let cls='opt-btn';
-    if(sel!==null){
-      if(i===q.correct) cls+=' correct';
-      else if(i===sel) cls+=' wrong';
-    }
-    return `<button class="${cls}" ${sel!==null?'disabled':''} onclick="answerQuiz(${i})">${esc(o)}</button>`;
-  }).join('');
-  let resultLine = '';
-  let battleHtml = '';
-  let reactionHtml = '';
-  if(sel!==null){
-    const isCorrect = state.quiz.result==='correct';
-    const dodged = !!state.quiz.dodged;
-    let battleClass, dmgText, lineHtml;
-    if(isCorrect && !dodged){
-      battleClass = 'hit';
-      dmgText = '-'+(state.quiz.damage||20);
-      lineHtml = '<div class="small-note" style="color:var(--accent-green);">✔ 完美命中！看穿弱點造成傷害！</div>';
-    } else if(isCorrect && dodged){
-      battleClass = 'dodge';
-      dmgText = '閃避！';
-      lineHtml = '<div class="small-note" style="color:var(--accent-light);">💨 看穿破綻，但被對方閃過了！</div>';
-    } else {
-      battleClass = 'miss';
-      dmgText = '';
-      lineHtml = '<div class="small-note" style="color:var(--accent-red);">✘ 揮棒落空，沒有出手機會</div>';
-    }
-    resultLine = lineHtml;
-    battleHtml = `
-    <div class="mini-battle ${battleClass}">
-      <div class="attacker">🏏</div>
-      <div class="impact">${battleClass==='hit'?'💥':(battleClass==='dodge'?'💨':'💦')}</div>
-      ${dmgText?`<div class="dmg-float">${dmgText}</div>`:''}
-      <div class="boss-target">${bossMiniVisual}</div>
-    </div>`;
-    if(state.quiz.monsterReaction){
-      reactionHtml = `<div style="margin-top:8px;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--text-dim);">
-        <span style="color:var(--accent-red);font-weight:600;">${esc(curBoss.name||'敵人')} ${esc(state.quiz.monsterReaction.action)}：</span>
-        ${esc(state.quiz.monsterReaction.line)}
-      </div>`;
-    }
-  }
-  return `
-  <div class="modal-bg" onclick="if(event.target===this && ${sel===null}) closeQuiz()">
-    <div class="modal">
-      <div class="flex-between" style="align-items:flex-start;">
-        <h3 style="margin:0;">⚔️ 攻擊挑戰</h3>
-        ${sel===null ? '<button class="btn secondary small" onclick="closeQuiz()">✕ 稍後再攻擊</button>' : ''}
-      </div>
-      <p style="font-size:15px;line-height:1.5;margin-top:10px;">${esc(q.q)}</p>
-      ${opts}
-      ${battleHtml}
-      ${resultLine}
-      ${reactionHtml}
-    </div>
-  </div>`;
-}
 function closeQuiz(){
   if(state.quiz && state.quiz.selectedIdx===null){
     state.quiz = null;
