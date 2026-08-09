@@ -1470,7 +1470,8 @@ let state = {
   classTierDraft: {},
   addGeoQuestionDraft: {q:'', opt0:'', opt1:'', opt2:'', opt3:'', correct:0},
   addKnowledgeDraft: {category:'', title:'', content:''},
-  addTeamRuleDraft: {category:'', title:'', content:''}
+  addTeamRuleDraft: {category:'', title:'', content:''},
+  coachAddPlayerDraft: {name:'', realName:'', avatarId:null}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -1758,7 +1759,6 @@ async function submitJournalForm(){
   const d = state.journalFormDraft || {};
   if(!d.satisfaction || !d.focus){ showToast('請至少完成「滿意度」與「專注度自評」'); return; }
   const p = state.playerData;
-  const due = goalFieldsDue(p);
   const journal = {
     satisfaction: d.satisfaction,
     improve: (d.improve||'').trim(),
@@ -1768,9 +1768,9 @@ async function submitJournalForm(){
     messageToCoach: (d.messageToCoach||'').trim()
   };
   const today = todayStr();
-  if(due.short && (d.shortGoal||'').trim()){ journal.shortGoal = d.shortGoal.trim(); p.lastShortGoalDate = today; }
-  if(due.mid && (d.midGoal||'').trim()){ journal.midGoal = d.midGoal.trim(); p.lastMidGoalDate = today; }
-  if(due.long && (d.longGoal||'').trim()){ journal.longGoal = d.longGoal.trim(); p.lastLongGoalDate = today; }
+  if((d.shortGoal||'').trim()){ journal.shortGoal = d.shortGoal.trim(); p.lastShortGoalDate = today; }
+  if((d.midGoal||'').trim()){ journal.midGoal = d.midGoal.trim(); p.lastMidGoalDate = today; }
+  if((d.longGoal||'').trim()){ journal.longGoal = d.longGoal.trim(); p.lastLongGoalDate = today; }
   state.showJournalForm = null;
   state.journalFormDraft = {};
   const r = await finalizeSpecialItem(itemId, {detail:'已線上填寫', journal});
@@ -2266,6 +2266,22 @@ function deletePlayer(name){
     await refreshOverview();
   });
 }
+async function coachAddPlayer(){
+  const d = state.coachAddPlayerDraft;
+  const name = (d.name||'').trim();
+  const realName = (d.realName||'').trim();
+  if(!name){ showToast('請輸入暱稱／ID'); return; }
+  if(!realName){ showToast('請填寫本名'); return; }
+  if(state.players.includes(name)){ showToast('這個暱稱／ID已經有人用了'); return; }
+  const avatarId = d.avatarId || (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id);
+  const p = defaultPlayer(name, realName, avatarId, null);
+  await savePlayer(p);
+  state.players.push(name);
+  state.coachAddPlayerDraft = {name:'', realName:'', avatarId:null};
+  showToast('已新增球員：'+name);
+  await refreshOverview();
+  loadPlayerChips();
+}
 async function viewPlayerLog(name){
   const p = normalizePlayer(await getPlayer(name));
   state.viewingPlayer = p;
@@ -2635,7 +2651,6 @@ function renderGeoChallengeModal(){
 function renderJournalFormModal(){
   const d = state.journalFormDraft || {};
   const p = state.playerData;
-  const due = goalFieldsDue(p);
   const scaleOptions = (val)=>[1,2,3,4,5].map(n=>`<option value="${n}" ${val==n?'selected':''}>${n}</option>`).join('');
   return `
   <div class="modal-bg" onclick="if(event.target===this) cancelJournalForm()">
@@ -2673,21 +2688,18 @@ function renderJournalFormModal(){
         <label>目標達成情況說明（選填）</label>
         <input type="text" value="${esc(d.goalNote||'')}" oninput="state.journalFormDraft.goalNote=this.value" placeholder="簡單說明一下">
       </div>
-      ${due.short ? `
       <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
-        <label>📅 短期目標（每週寫一次）</label>
+        <label>📅 短期目標（選填，這一週想達成什麼？）</label>
         <textarea rows="2" oninput="state.journalFormDraft.shortGoal=this.value" placeholder="這一週想達成什麼目標？">${esc(d.shortGoal||'')}</textarea>
-      </div>` : ''}
-      ${due.mid ? `
+      </div>
       <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
-        <label>📅 中期目標（兩週寫一次）</label>
+        <label>📅 中期目標（選填，接下來兩週想達成什麼？）</label>
         <textarea rows="2" oninput="state.journalFormDraft.midGoal=this.value" placeholder="接下來兩週想達成什麼目標？">${esc(d.midGoal||'')}</textarea>
-      </div>` : ''}
-      ${due.long ? `
+      </div>
       <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
-        <label>📅 長期目標（一個月寫一次）</label>
+        <label>📅 長期目標（選填，這一個月想達成什麼？）</label>
         <textarea rows="2" oninput="state.journalFormDraft.longGoal=this.value" placeholder="這一個月想達成什麼目標？">${esc(d.longGoal||'')}</textarea>
-      </div>` : ''}
+      </div>
       <div style="margin-bottom:12px;">
         <label>想對教練說的話（選填）</label>
         <textarea rows="2" oninput="state.journalFormDraft.messageToCoach=this.value" placeholder="有什麼想讓教練知道的嗎？">${esc(d.messageToCoach||'')}</textarea>
@@ -3953,6 +3965,21 @@ function renderCoachRole(){
     </div>
     <table><thead><tr><th>角色</th><th>暱稱／ID</th><th>本名</th><th>等級</th><th>能量</th><th>點數</th><th>連續</th><th>正確率</th><th>兌換</th></tr></thead>
     <tbody>${rows || '<tr><td colspan=9 class="empty">尚無球員資料</td></tr>'}</tbody></table>
+    <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
+      <h2 style="font-size:16px;">➕ 教練直接新增球員</h2>
+      <div class="small-note" style="margin-bottom:8px;">通常學生自己在選角畫面建立就好，這裡是給教練直接手動建立用（例如幫學生代辦）。</div>
+      <div class="row-flex">
+        <div><label>暱稱／ID</label><input type="text" value="${esc(state.coachAddPlayerDraft.name)}" oninput="state.coachAddPlayerDraft.name=this.value" placeholder="例如：小明"></div>
+        <div><label>本名</label><input type="text" value="${esc(state.coachAddPlayerDraft.realName)}" oninput="state.coachAddPlayerDraft.realName=this.value" placeholder="例如：王小明"></div>
+        <div><label>角色</label>
+          <select onchange="state.coachAddPlayerDraft.avatarId=this.value">
+            <option value="">預設（第一個角色）</option>
+            ${CHARACTER_ROSTER.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:0;"><button class="btn gold" onclick="coachAddPlayer()">新增球員</button></div>
+      </div>
+    </div>
     <div class="small-note" style="margin-top:12px;">${esc(state.config.rewardNote)}</div>`;
   }
 
