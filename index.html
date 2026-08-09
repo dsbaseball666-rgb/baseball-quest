@@ -954,7 +954,8 @@ function defaultPlayer(name, realName, avatarId, pin){
     level:1, energy:0, points:0, ultimateGauge:0,
     correct:0, wrong:0, streak:0, lastDate:null,
     log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false,
-    trialDate:null, trialCount:0, trialCorrect:0, pin: pin || null
+    trialDate:null, trialCount:0, trialCorrect:0, pin: pin || null,
+    currentShortGoal:null, currentMidGoal:null, currentLongGoal:null
   };
 }
 function normalizePlayer(p){
@@ -971,6 +972,9 @@ function normalizePlayer(p){
   if(p.lastLongGoalDate===undefined) p.lastLongGoalDate = null;
   if(p.lastMidGoalDate===undefined) p.lastMidGoalDate = null;
   if(p.lastShortGoalDate===undefined) p.lastShortGoalDate = null;
+  if(p.currentShortGoal===undefined) p.currentShortGoal = null;
+  if(p.currentMidGoal===undefined) p.currentMidGoal = null;
+  if(p.currentLongGoal===undefined) p.currentLongGoal = null;
   if(p.trialDate===undefined) p.trialDate = null;
   if(p.trialCount==null) p.trialCount = 0;
   if(p.trialCorrect==null) p.trialCorrect = 0;
@@ -1759,6 +1763,7 @@ async function submitJournalForm(){
   const d = state.journalFormDraft || {};
   if(!d.satisfaction || !d.focus){ showToast('請至少完成「滿意度」與「專注度自評」'); return; }
   const p = state.playerData;
+  const due = goalFieldsDue(p);
   const journal = {
     satisfaction: d.satisfaction,
     improve: (d.improve||'').trim(),
@@ -1768,9 +1773,9 @@ async function submitJournalForm(){
     messageToCoach: (d.messageToCoach||'').trim()
   };
   const today = todayStr();
-  if((d.shortGoal||'').trim()){ journal.shortGoal = d.shortGoal.trim(); p.lastShortGoalDate = today; }
-  if((d.midGoal||'').trim()){ journal.midGoal = d.midGoal.trim(); p.lastMidGoalDate = today; }
-  if((d.longGoal||'').trim()){ journal.longGoal = d.longGoal.trim(); p.lastLongGoalDate = today; }
+  if(due.short && (d.shortGoal||'').trim()){ journal.shortGoal = d.shortGoal.trim(); p.lastShortGoalDate = today; p.currentShortGoal = d.shortGoal.trim(); }
+  if(due.mid && (d.midGoal||'').trim()){ journal.midGoal = d.midGoal.trim(); p.lastMidGoalDate = today; p.currentMidGoal = d.midGoal.trim(); }
+  if(due.long && (d.longGoal||'').trim()){ journal.longGoal = d.longGoal.trim(); p.lastLongGoalDate = today; p.currentLongGoal = d.longGoal.trim(); }
   state.showJournalForm = null;
   state.journalFormDraft = {};
   const r = await finalizeSpecialItem(itemId, {detail:'已線上填寫', journal});
@@ -2651,6 +2656,7 @@ function renderGeoChallengeModal(){
 function renderJournalFormModal(){
   const d = state.journalFormDraft || {};
   const p = state.playerData;
+  const due = goalFieldsDue(p);
   const scaleOptions = (val)=>[1,2,3,4,5].map(n=>`<option value="${n}" ${val==n?'selected':''}>${n}</option>`).join('');
   return `
   <div class="modal-bg" onclick="if(event.target===this) cancelJournalForm()">
@@ -2688,18 +2694,21 @@ function renderJournalFormModal(){
         <label>目標達成情況說明（選填）</label>
         <input type="text" value="${esc(d.goalNote||'')}" oninput="state.journalFormDraft.goalNote=this.value" placeholder="簡單說明一下">
       </div>
+      ${due.short ? `
       <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
-        <label>📅 短期目標（選填，這一週想達成什麼？）</label>
+        <label>📅 短期目標（每週寫一次）</label>
         <textarea rows="2" oninput="state.journalFormDraft.shortGoal=this.value" placeholder="這一週想達成什麼目標？">${esc(d.shortGoal||'')}</textarea>
-      </div>
+      </div>` : ''}
+      ${due.mid ? `
       <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
-        <label>📅 中期目標（選填，接下來兩週想達成什麼？）</label>
+        <label>📅 中期目標（兩週寫一次）</label>
         <textarea rows="2" oninput="state.journalFormDraft.midGoal=this.value" placeholder="接下來兩週想達成什麼目標？">${esc(d.midGoal||'')}</textarea>
-      </div>
+      </div>` : ''}
+      ${due.long ? `
       <div style="margin-bottom:12px;padding:10px;background:var(--bg-panel-2);border-radius:10px;">
-        <label>📅 長期目標（選填，這一個月想達成什麼？）</label>
+        <label>📅 長期目標（一個月寫一次）</label>
         <textarea rows="2" oninput="state.journalFormDraft.longGoal=this.value" placeholder="這一個月想達成什麼目標？">${esc(d.longGoal||'')}</textarea>
-      </div>
+      </div>` : ''}
       <div style="margin-bottom:12px;">
         <label>想對教練說的話（選填）</label>
         <textarea rows="2" oninput="state.journalFormDraft.messageToCoach=this.value" placeholder="有什麼想讓教練知道的嗎？">${esc(d.messageToCoach||'')}</textarea>
@@ -3431,6 +3440,16 @@ function renderPlayerRole(){
       <div class="small-note" style="margin-top:6px;">使用狀態需教練確認，不能自己標記喔。</div>
     </div>
   </div>
+
+  ${(p.currentShortGoal || p.currentMidGoal || p.currentLongGoal) ? `
+  <div class="panel" style="margin-top:10px;">
+    <h2 style="font-size:16px;"><span class="eyebrow">Goals</span>🎯 我的目標</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:8px;">
+      ${p.currentShortGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 短期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentShortGoal)}</div></div>` : ''}
+      ${p.currentMidGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 中期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentMidGoal)}</div></div>` : ''}
+      ${p.currentLongGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 長期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentLongGoal)}</div></div>` : ''}
+    </div>
+  </div>` : ''}
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;align-items:start;">
     <div style="display:flex;flex-direction:column;gap:10px;">
