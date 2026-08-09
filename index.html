@@ -295,6 +295,22 @@
   }catch(e){
     console.error('Firebase 初始化失敗', e);
   }
+  // 行動祕書系統（體能檢測資料來源），跟訓練競技場是不同的 Firebase 專案，用獨立的 app 名稱連線避免衝突
+  const SECRETARY_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCWJdVhQJgkSsO4__6dAs98PVXoj4tlJQo",
+    authDomain: "baseball-coach-dashboard.firebaseapp.com",
+    projectId: "baseball-coach-dashboard",
+    storageBucket: "baseball-coach-dashboard.firebasestorage.app",
+    messagingSenderId: "698093778887",
+    appId: "1:698093778887:web:d5f4bf243a64d8ea988be2"
+  };
+  let secretaryDb = null;
+  try{
+    const secretaryApp = firebase.initializeApp(SECRETARY_FIREBASE_CONFIG, "secretaryApp");
+    secretaryDb = secretaryApp.firestore();
+  }catch(e){
+    console.error('行動祕書系統 Firebase 初始化失敗', e);
+  }
 </script>
 
 <body>
@@ -1487,6 +1503,7 @@ let state = {
   addTeamRuleDraft: {category:'', title:'', content:''},
   coachAddPlayerDraft: {name:'', realName:'', avatarId:null, grade:''},
   addExamDraft: {playerName:'', examName:'', scores:{}},
+  secretarySyncStatus: null,
   goalReplyDraft: {}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
@@ -2317,6 +2334,43 @@ async function coachDeleteExamScore(playerName, index){
     showToast('已刪除');
     render();
   });
+}
+async function syncFitnessFromSecretary(){
+  state.secretarySyncStatus = {loading:true, error:null, raw:null, matched:0, unmatched:[]};
+  render();
+  if(!secretaryDb){
+    state.secretarySyncStatus = {loading:false, error:'行動祕書系統的 Firebase 沒有初始化成功，請檢查設定值', raw:null, matched:0, unmatched:[]};
+    render();
+    return;
+  }
+  try{
+    const doc = await secretaryDb.collection('baseballCoach').doc('fitnessRecords').get();
+    if(!doc.exists){
+      state.secretarySyncStatus = {loading:false, error:'讀取成功，但找不到 baseballCoach/fitnessRecords 這份文件（可能路徑不對，或還沒有資料）', raw:null, matched:0, unmatched:[]};
+      render();
+      return;
+    }
+    const data = doc.data();
+    const rawJson = data.json;
+    let parsed;
+    try{
+      parsed = JSON.parse(rawJson);
+    }catch(e){
+      state.secretarySyncStatus = {loading:false, error:'讀到資料了，但 json 欄位不是合法的 JSON 格式，請看下面原始內容', raw: String(rawJson).slice(0,2000), matched:0, unmatched:[]};
+      render();
+      return;
+    }
+    // 先把原始解析結果顯示出來，方便確認格式後再決定怎麼比對
+    state.secretarySyncStatus = {loading:false, error:null, raw: JSON.stringify(parsed, null, 2).slice(0,3000), matched:0, unmatched:[], parsedSample:true};
+    render();
+  }catch(e){
+    let msg = '連線或讀取失敗：' + (e && e.message ? e.message : String(e));
+    if(e && e.code === 'permission-denied'){
+      msg = '被 Firestore 安全規則擋下來了（permission-denied）。需要請開發者放寬 baseballCoach 這個 collection 的讀取權限，或提供可以登入的帳號密碼。';
+    }
+    state.secretarySyncStatus = {loading:false, error: msg, raw:null, matched:0, unmatched:[]};
+    render();
+  }
 }
 async function handleFitnessImport(fileInputEl){
   const file = fileInputEl.files[0];
@@ -4145,9 +4199,17 @@ function renderCoachRole(){
         ${records || '<div class="small-note" style="margin-top:6px;">尚無體能檢測紀錄</div>'}
       </div>`;
     }).join('');
+    const sync = state.secretarySyncStatus;
     body = `
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
-      <h2 style="font-size:16px;">📥 匯入體能檢測成績</h2>
+      <h2 style="font-size:16px;">🔄 從行動祕書系統直接同步（測試中）</h2>
+      <div class="small-note" style="margin:6px 0 10px;">直接讀取 baseballCoach/fitnessRecords 這份文件。第一次先按下去看看結果——如果被權限擋下來，或格式跟預期不同，都會顯示原始內容，方便我們一起確認怎麼調整。</div>
+      <button class="btn gold" ${sync&&sync.loading?'disabled':''} onclick="syncFitnessFromSecretary()">${sync&&sync.loading?'讀取中…':'🔄 立即同步'}</button>
+      ${sync && sync.error ? `<div class="small-note" style="margin-top:10px;color:var(--accent-red);">⚠️ ${esc(sync.error)}</div>` : ''}
+      ${sync && sync.raw ? `<div style="margin-top:10px;"><div class="small-note" style="margin-bottom:4px;">${sync.parsedSample?'讀取到的原始資料內容（給教練確認格式用）：':'原始內容：'}</div><pre style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:11px;overflow-x:auto;max-height:300px;overflow-y:auto;white-space:pre-wrap;">${esc(sync.raw)}</pre></div>` : ''}
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">📥 手動匯入體能檢測成績</h2>
       <div class="small-note" style="margin:6px 0 10px;">從你的行動祕書系統把體能檢測成績匯出成 CSV 或 Excel 檔案，第一欄要是球員的暱稱或本名（要跟這裡的資料一致才能對上），其他欄位可以是任何檢測項目（例如：50公尺短跑、立定跳遠、握力），系統會自動比對球員並存進紀錄。</div>
       <input type="file" accept=".csv,.xlsx,.xls" onchange="handleFitnessImport(this)">
     </div>
