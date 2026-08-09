@@ -1504,6 +1504,7 @@ let state = {
   coachAddPlayerDraft: {name:'', realName:'', avatarId:null, grade:''},
   addExamDraft: {playerName:'', examName:'', scores:{}},
   secretarySyncStatus: null,
+  examImportName: '',
   goalReplyDraft: {}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
@@ -2334,6 +2335,53 @@ async function coachDeleteExamScore(playerName, index){
     showToast('已刪除');
     render();
   });
+}
+async function handleExamImport(fileInputEl){
+  const examName = (state.examImportName||'').trim();
+  if(!examName){ showToast('請先輸入這是第幾次段考'); return; }
+  const file = fileInputEl.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      if(!rows.length){ showToast('檔案是空的或格式不對'); return; }
+      const keys = Object.keys(rows[0]);
+      const nameKey = keys.find(k=>/姓名|暱稱|名字|ID|學生/.test(k)) || keys[0];
+      const subjectKeys = keys.filter(k=>EXAM_SUBJECTS.includes(k));
+      if(!subjectKeys.length){ showToast('檔案裡沒有找到任何科目欄位，欄位標題要用：'+EXAM_SUBJECTS.join('、')); return; }
+      const allPlayers = {};
+      for(const pname of state.players){
+        const pdata = await getPlayer(pname);
+        if(pdata) allPlayers[pname] = pdata;
+      }
+      let matched = 0; const unmatched = [];
+      for(const row of rows){
+        const rawName = String(row[nameKey]||'').trim();
+        if(!rawName) continue;
+        const player = Object.values(allPlayers).find(pd=>pd.name===rawName || pd.realName===rawName);
+        if(!player){ unmatched.push(rawName); continue; }
+        const scores = {};
+        let hasAny = false;
+        subjectKeys.forEach(k=>{ if(row[k]!==''&&row[k]!==undefined&&row[k]!==null){ scores[k]=Number(row[k]); hasAny=true; } });
+        if(!hasAny) continue;
+        if(!player.examScores) player.examScores = [];
+        player.examScores.push({examName, date: todayStr(), scores});
+        await savePlayer(player);
+        matched++;
+      }
+      showToast('匯入完成！成功比對 '+matched+' 筆'+(unmatched.length?('，'+unmatched.length+' 筆姓名沒對到：'+unmatched.join('、')):''));
+      fileInputEl.value = '';
+      examScoresCache = [];
+      render();
+    } catch(err){
+      showToast('匯入失敗，請確認檔案格式是 CSV 或 Excel', 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 async function syncFitnessFromSecretary(){
   state.secretarySyncStatus = {loading:true, error:null, raw:null, matched:0, unmatched:[], imported:0, skipped:0};
@@ -4256,7 +4304,15 @@ function renderCoachRole(){
     }).join('');
     body = `
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
-      <h2 style="font-size:16px;">➕ 新增段考成績</h2>
+      <h2 style="font-size:16px;">📥 用 Excel／CSV 批次匯入段考成績</h2>
+      <div class="small-note" style="margin:6px 0 10px;">第一欄要是球員的暱稱或本名，其他欄位用科目名稱當標題（國文、英文、社會、自然、數學、公民、地理、歷史、理化、建教、作文），一列就是一位學生這次段考的成績，系統會依姓名自動比對匯入。</div>
+      <div class="row-flex">
+        <div><label>這批是第幾次段考</label><input type="text" id="examImportName" value="${esc(state.examImportName||'')}" oninput="state.examImportName=this.value" placeholder="例如：第一次段考"></div>
+      </div>
+      <div style="margin-top:10px;"><input type="file" accept=".csv,.xlsx,.xls" onchange="handleExamImport(this)"></div>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">➕ 手動新增單一學生段考成績</h2>
       <div class="row-flex" style="margin-top:8px;">
         <div><label>選擇球員</label><select onchange="state.addExamDraft.playerName=this.value">
           <option value="">請選擇</option>${playerOptions}
