@@ -955,7 +955,8 @@ function defaultPlayer(name, realName, avatarId, pin){
     correct:0, wrong:0, streak:0, lastDate:null,
     log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false,
     trialDate:null, trialCount:0, trialCorrect:0, pin: pin || null,
-    currentShortGoal:null, currentMidGoal:null, currentLongGoal:null
+    currentShortGoal:null, currentMidGoal:null, currentLongGoal:null,
+    coachReplyShort:null, coachReplyMid:null, coachReplyLong:null
   };
 }
 function normalizePlayer(p){
@@ -975,6 +976,9 @@ function normalizePlayer(p){
   if(p.currentShortGoal===undefined) p.currentShortGoal = null;
   if(p.currentMidGoal===undefined) p.currentMidGoal = null;
   if(p.currentLongGoal===undefined) p.currentLongGoal = null;
+  if(p.coachReplyShort===undefined) p.coachReplyShort = null;
+  if(p.coachReplyMid===undefined) p.coachReplyMid = null;
+  if(p.coachReplyLong===undefined) p.coachReplyLong = null;
   if(p.trialDate===undefined) p.trialDate = null;
   if(p.trialCount==null) p.trialCount = 0;
   if(p.trialCorrect==null) p.trialCorrect = 0;
@@ -1475,7 +1479,8 @@ let state = {
   addGeoQuestionDraft: {q:'', opt0:'', opt1:'', opt2:'', opt3:'', correct:0},
   addKnowledgeDraft: {category:'', title:'', content:''},
   addTeamRuleDraft: {category:'', title:'', content:''},
-  coachAddPlayerDraft: {name:'', realName:'', avatarId:null}
+  coachAddPlayerDraft: {name:'', realName:'', avatarId:null},
+  goalReplyDraft: {}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -2406,17 +2411,58 @@ async function refreshJournals(){
   const names = await listPlayers();
   const all = [];
   for(const n of names){
-    const p = await getPlayer(n);
+    const p = normalizePlayer(await getPlayer(n));
     if(!p) continue;
-    (p.log||[]).forEach(l=>{
-      if(l.journal){
-        all.push({ playerName: p.name, realName: p.realName||'', date: l.date, journal: l.journal });
-      }
+    const entries = [];
+    (p.log||[]).forEach((l,idx)=>{
+      if(l.journal){ entries.push({logIndex: idx, date: l.date, journal: l.journal}); }
+    });
+    entries.sort((a,b)=> b.date.localeCompare(a.date));
+    all.push({
+      name: p.name, realName: p.realName||'', avatarId: p.avatarId,
+      currentShortGoal: p.currentShortGoal, currentMidGoal: p.currentMidGoal, currentLongGoal: p.currentLongGoal,
+      coachReplyShort: p.coachReplyShort, coachReplyMid: p.coachReplyMid, coachReplyLong: p.coachReplyLong,
+      entries
     });
   }
-  all.sort((a,b)=> b.date.localeCompare(a.date));
   journalsCache = all;
   render();
+}
+async function coachReplyGoal(playerName, which){
+  const key = 'coachReply'+which.charAt(0).toUpperCase()+which.slice(1);
+  const draftKey = playerName+'_'+which;
+  const text = (state.goalReplyDraft[draftKey]||'').trim();
+  if(!text){ showToast('請輸入回覆內容'); return; }
+  const p = await getPlayer(playerName);
+  if(!p) return;
+  p[key] = text;
+  await savePlayer(p);
+  delete state.goalReplyDraft[draftKey];
+  showToast('已回覆「'+playerName+'」的目標');
+  await refreshJournals();
+}
+async function coachDeleteGoal(playerName, which){
+  const goalKey = 'current'+which.charAt(0).toUpperCase()+which.slice(1)+'Goal';
+  const replyKey = 'coachReply'+which.charAt(0).toUpperCase()+which.slice(1);
+  askConfirm('確定要刪除「'+playerName+'」的這個目標嗎？連同教練回覆也會一起刪除。', async ()=>{
+    const p = await getPlayer(playerName);
+    if(!p) return;
+    p[goalKey] = null;
+    p[replyKey] = null;
+    await savePlayer(p);
+    showToast('已刪除目標');
+    await refreshJournals();
+  });
+}
+async function coachDeleteJournalEntry(playerName, logIndex){
+  askConfirm('確定要刪除這筆訓練日誌內容嗎？（不會影響已經獲得的能量與點數）', async ()=>{
+    const p = await getPlayer(playerName);
+    if(!p || !p.log || !p.log[logIndex]) return;
+    delete p.log[logIndex].journal;
+    await savePlayer(p);
+    showToast('已刪除這筆日誌');
+    await refreshJournals();
+  });
 }
 
 /* ============ 畫面渲染 ============ */
@@ -3445,9 +3491,9 @@ function renderPlayerRole(){
   <div class="panel" style="margin-top:10px;">
     <h2 style="font-size:16px;"><span class="eyebrow">Goals</span>🎯 我的目標</h2>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:8px;">
-      ${p.currentShortGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 短期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentShortGoal)}</div></div>` : ''}
-      ${p.currentMidGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 中期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentMidGoal)}</div></div>` : ''}
-      ${p.currentLongGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 長期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentLongGoal)}</div></div>` : ''}
+      ${p.currentShortGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 短期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentShortGoal)}</div>${p.coachReplyShort?`<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(p.coachReplyShort)}</div>`:''}</div>` : ''}
+      ${p.currentMidGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 中期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentMidGoal)}</div>${p.coachReplyMid?`<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(p.coachReplyMid)}</div>`:''}</div>` : ''}
+      ${p.currentLongGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 長期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentLongGoal)}</div>${p.coachReplyLong?`<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(p.coachReplyLong)}</div>`:''}</div>` : ''}
     </div>
   </div>` : ''}
 
@@ -3848,23 +3894,56 @@ function renderCoachRole(){
     </div>`;
   } else if(state.coachTab==='journals'){
     if(journalsCache.length===0 && state.players.length>0){ refreshJournals(); }
-    const entries = journalsCache.map(e=>{
-      const rows = journalFieldLabels().map(f=>{
-        const v = e.journal[f.key];
-        if(!v) return '';
-        return `<div style="margin-bottom:6px;"><span class="small-note" style="font-weight:600;">${esc(f.label)}：</span><span style="font-size:13px;">${esc(v)}</span></div>`;
+    function goalBlock(playerName, which, label, goalText, replyText){
+      const draftKey = playerName+'_'+which;
+      return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;">
+        <div class="small-note" style="color:var(--accent-light);font-weight:600;">${label}</div>
+        ${goalText ? `
+          <div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(goalText)}</div>
+          ${replyText ? `<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(replyText)}</div>` : ''}
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <input type="text" style="flex:1;font-size:12px;" value="${esc(state.goalReplyDraft[draftKey]||'')}" oninput="state.goalReplyDraft['${draftKey}']=this.value" placeholder="${replyText?'更新回覆…':'寫回覆給他…'}">
+            <button class="btn secondary small" onclick="coachReplyGoal('${esc(playerName)}','${which}')">回覆</button>
+            <button class="btn secondary small" style="color:var(--accent-red);" onclick="coachDeleteGoal('${esc(playerName)}','${which}')">🗑️</button>
+          </div>` : '<div class="small-note" style="margin-top:4px;">尚未設定</div>'}
+      </div>`;
+    }
+    const cards = journalsCache.map(pl=>{
+      const ch = characterById(pl.avatarId);
+      const entries = (pl.entries||[]).slice(0,5).map(e=>{
+        const rows = journalFieldLabels().filter(f=>!['shortGoal','midGoal','longGoal'].includes(f.key)).map(f=>{
+          const v = e.journal[f.key];
+          if(!v) return '';
+          return `<div style="margin-bottom:4px;"><span class="small-note" style="font-weight:600;">${esc(f.label)}：</span><span style="font-size:12px;">${esc(v)}</span></div>`;
+        }).join('');
+        return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;">
+          <div class="flex-between"><span class="small-note">${esc(e.date)}</span><button class="btn secondary small" style="padding:2px 8px;font-size:10px;" onclick="coachDeleteJournalEntry('${esc(pl.name)}',${e.logIndex})">🗑️ 刪除</button></div>
+          ${rows || '<div class="small-note">（無其他內容）</div>'}
+        </div>`;
       }).join('');
-      return `<div class="panel" style="background:var(--bg-panel-2);margin-top:10px;">
-        <div class="small-note" style="margin-bottom:6px;">${esc(e.date)} ・ ${esc(e.playerName)}${e.realName?'（'+esc(e.realName)+'）':''}</div>
-        ${rows}
+      return `<div class="panel" style="background:var(--bg-panel-2);margin-top:0;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;">
+          <div>
+            <div style="font-weight:600;">${esc(pl.name)}</div>
+            <div class="small-note">${esc(pl.realName||'未填本名')}</div>
+          </div>
+        </div>
+        ${goalBlock(pl.name,'short','📅 短期目標',pl.currentShortGoal,pl.coachReplyShort)}
+        ${goalBlock(pl.name,'mid','📅 中期目標',pl.currentMidGoal,pl.coachReplyMid)}
+        ${goalBlock(pl.name,'long','📅 長期目標',pl.currentLongGoal,pl.coachReplyLong)}
+        <h3 style="margin-top:14px;font-size:14px;">最近日誌（${(pl.entries||[]).length}筆）</h3>
+        ${entries || '<div class="small-note" style="margin-top:6px;">尚無日誌紀錄</div>'}
       </div>`;
     }).join('');
     body = `
     <div class="flex-between">
-      <div class="small-note">全隊所有學生填寫的訓練日誌內容，依日期新到舊排序，不用逐一點進每個球員查看。</div>
+      <div class="small-note">依球員分組，每張卡片可以單獨看短/中/長期目標，回覆或刪除都不影響其他人。</div>
       <button class="btn secondary small" onclick="journalsCache=[];refreshJournals();">重新整理</button>
     </div>
-    ${entries || '<div class="empty" style="margin-top:14px;">目前還沒有任何學生填寫過訓練日誌</div>'}`;
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;">
+      ${cards || '<div class="empty">目前還沒有任何學生資料</div>'}
+    </div>`;
   } else if(state.coachTab==='bonus'){
     let rows = (state.config.bonusTasks||[]).map(t=>`
       <tr><td>${esc(t.name)}</td><td>+${t.points}</td><td><button class="btn secondary small" onclick="deleteBonusTask('${t.id}')">刪除</button></td></tr>
