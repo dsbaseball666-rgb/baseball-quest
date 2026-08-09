@@ -3369,6 +3369,55 @@ function renderPlayerLogModal(){
   ${state.viewingJournalIndex!=null ? renderJournalViewModal() : ''}`;
 }
 
+function renderExamScoreBars(p){
+  if(!p.examScores || !p.examScores.length) return '';
+  const exams = p.examScores.slice(-3);
+  const sections = exams.map(ex=>{
+    const rows = EXAM_SUBJECTS.filter(s=>ex.scores[s]!==undefined).map(s=>{
+      const score = Number(ex.scores[s]);
+      const pct = Math.max(4, Math.min(100, score));
+      return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <div style="width:40px;flex-shrink:0;font-size:12px;color:var(--text-dim);">${esc(s)}</div>
+        <div class="hp-bar-outer" style="flex:1;height:14px;"><div class="hp-bar-inner" style="width:${pct}%;background:linear-gradient(90deg,var(--accent-green),#5fd1c4);"></div></div>
+        <div style="width:32px;flex-shrink:0;text-align:right;font-size:12px;font-weight:600;color:var(--accent-light);">${score}</div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-top:12px;"><div class="small-note" style="font-weight:600;">${esc(ex.examName)} ・ ${esc(ex.date)}</div>${rows}</div>`;
+  }).join('');
+  return `<div class="panel" style="margin-top:14px;">
+    <h2 style="font-size:16px;"><span class="eyebrow">Exams</span>📝 段考成績</h2>
+    ${sections}
+  </div>`;
+}
+function renderFitnessBars(p){
+  if(!p.fitnessTests || !p.fitnessTests.length) return '';
+  const groups = {};
+  p.fitnessTests.forEach(t=>{
+    const key = t.item || (t.metrics ? Object.keys(t.metrics).join('、') : '檢測');
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+  const sections = Object.entries(groups).map(([item, tests])=>{
+    const sorted = tests.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const values = sorted.map(t=> (t.value!==undefined && t.value!==null && !isNaN(Number(t.value))) ? Number(t.value) : null).filter(v=>v!==null);
+    const maxV = values.length ? Math.max(...values) : 0;
+    const rows = sorted.map(t=>{
+      const val = (t.value!==undefined && t.value!==null && !isNaN(Number(t.value))) ? Number(t.value) : null;
+      const pct = (val!==null && maxV>0) ? Math.max(6, Math.round(val/maxV*100)) : 100;
+      const label = val!==null ? (t.value + (t.unit?(' '+t.unit):'')) : Object.entries(t.metrics||{}).map(([k,v])=>k+' '+v).join('、');
+      return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <div style="width:78px;flex-shrink:0;font-size:11px;" class="small-note">${esc(t.date)}</div>
+        <div class="hp-bar-outer" style="flex:1;height:14px;"><div class="hp-bar-inner" style="width:${pct}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);"></div></div>
+        <div style="min-width:64px;flex-shrink:0;text-align:right;font-size:12px;font-weight:600;color:var(--accent-light);">${esc(String(label))}</div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-top:12px;"><div class="small-note" style="font-weight:600;">${esc(item)}</div>${rows}</div>`;
+  }).join('');
+  return `<div class="panel" style="margin-top:14px;">
+    <h2 style="font-size:16px;"><span class="eyebrow">Fitness</span>💪 體能檢測成績</h2>
+    ${sections}
+  </div>`;
+}
 function fitnessTestChipsHtml(t, chipStyle){
   // 支援兩種格式：手動匯入CSV的 metrics 物件、行動祕書系統同步的 item/value/unit 明細
   if(t.item){
@@ -3731,24 +3780,6 @@ function renderPlayerRole(){
     </div>
   </div>` : ''}
 
-  ${(p.examScores && p.examScores.length) ? `
-  <div class="panel" style="margin-top:10px;">
-    <h2 style="font-size:16px;"><span class="eyebrow">Exams</span>📝 段考成績</h2>
-    ${p.examScores.slice().reverse().map(ex=>{
-      const chips = EXAM_SUBJECTS.filter(s=>ex.scores[s]!==undefined).map(s=>`<span style="display:inline-block;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;margin:2px;font-size:12px;">${s} <b style="color:var(--accent-light);">${ex.scores[s]}</b></span>`).join('');
-      return `<div style="margin-top:8px;"><div class="small-note" style="font-weight:600;">${esc(ex.examName)} ・ ${esc(ex.date)}</div><div style="margin-top:4px;">${chips}</div></div>`;
-    }).join('')}
-  </div>` : ''}
-
-  ${(p.fitnessTests && p.fitnessTests.length) ? `
-  <div class="panel" style="margin-top:10px;">
-    <h2 style="font-size:16px;"><span class="eyebrow">Fitness</span>💪 體能檢測</h2>
-    ${p.fitnessTests.slice().reverse().map(t=>{
-      const chips = fitnessTestChipsHtml(t, 'display:inline-block;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;margin:2px;font-size:12px;');
-      return `<div style="margin-top:8px;"><div class="small-note" style="font-weight:600;">${esc(t.date)}${t.semester?(' ・ '+esc(t.semester)):''}</div><div style="margin-top:4px;">${chips}</div></div>`;
-    }).join('')}
-  </div>` : ''}
-
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;align-items:start;">
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div class="panel" style="margin-top:0;padding:14px;">
@@ -3800,7 +3831,9 @@ function renderPlayerRole(){
     <div class="small-note" style="margin-bottom:8px;">完成後直接回報，不限次數，也不影響每日練習紀錄。</div>
     <div class="item-list">${bonusRows}</div>
     ${bonusHistory ? `<h2 style="margin-top:16px;font-size:16px;">最近回報</h2>${bonusHistory}` : ''}
-  </div>`;
+  </div>
+  ${renderExamScoreBars(p)}
+  ${renderFitnessBars(p)}`;
 }
 
 function renderPathModal(itemRows, logRows, allDoneToday){
