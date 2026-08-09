@@ -275,6 +275,7 @@
 ============================================================ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
   const FIREBASE_CONFIG = {
     apiKey: "AIzaSyApM-KLwz5TN44NMiCsRGXTYjBWdmpDJE0",
@@ -948,7 +949,7 @@ async function listPlayers(){
     return keys || [];
   }catch(e){ return []; }
 }
-function defaultPlayer(name, realName, avatarId, pin){
+function defaultPlayer(name, realName, avatarId, pin, grade){
   return {
     name, realName: realName||'', avatarId: avatarId || (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id) || null,
     level:1, energy:0, points:0, ultimateGauge:0,
@@ -956,7 +957,8 @@ function defaultPlayer(name, realName, avatarId, pin){
     log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false,
     trialDate:null, trialCount:0, trialCorrect:0, pin: pin || null,
     currentShortGoal:null, currentMidGoal:null, currentLongGoal:null,
-    coachReplyShort:null, coachReplyMid:null, coachReplyLong:null
+    coachReplyShort:null, coachReplyMid:null, coachReplyLong:null,
+    grade: grade || '', examScores: [], fitnessTests: []
   };
 }
 function normalizePlayer(p){
@@ -984,6 +986,9 @@ function normalizePlayer(p){
   if(p.trialCorrect==null) p.trialCorrect = 0;
   if(p.trialDate !== todayStr()){ p.trialDate = todayStr(); p.trialCount = 0; p.trialCorrect = 0; }
   if(p.pin===undefined) p.pin = null;
+  if(p.grade===undefined) p.grade = '';
+  if(!p.examScores) p.examScores = [];
+  if(!p.fitnessTests) p.fitnessTests = [];
   return p;
 }
 function characterById(id){
@@ -1430,6 +1435,7 @@ let state = {
   newPlayerRealName: '',
   newPlayerAvatarId: null,
   newPlayerPin: '',
+  newPlayerGrade: '',
   showCreatePlayerModal: false,
   pendingPlayerUnlock: null,
   pinInputDraft: '',
@@ -1479,7 +1485,8 @@ let state = {
   addGeoQuestionDraft: {q:'', opt0:'', opt1:'', opt2:'', opt3:'', correct:0},
   addKnowledgeDraft: {category:'', title:'', content:''},
   addTeamRuleDraft: {category:'', title:'', content:''},
-  coachAddPlayerDraft: {name:'', realName:'', avatarId:null},
+  coachAddPlayerDraft: {name:'', realName:'', avatarId:null, grade:''},
+  addExamDraft: {playerName:'', examName:'', scores:{}},
   goalReplyDraft: {}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
@@ -1587,17 +1594,19 @@ async function createPlayer(){
   const realName = (state.newPlayerRealName||'').trim();
   if(!name){ showToast('請輸入暱稱／ID'); return; }
   if(!realName){ showToast('請填寫本名，這樣教練才知道是你喔'); return; }
+  if(!state.newPlayerGrade){ showToast('請選擇年級'); return; }
   if(!state.newPlayerAvatarId){ showToast('請選一個你的角色'); return; }
   if(state.players.includes(name)){ showToast('這個暱稱／ID已經有人用了，換一個吧'); return; }
   const pin = (state.newPlayerPin||'').trim();
   if(pin && !/^\d{4}$/.test(pin)){ showToast('密碼請輸入 4 位數字，或留空不設密碼'); return; }
-  const p = defaultPlayer(name, realName, state.newPlayerAvatarId, pin || null);
+  const p = defaultPlayer(name, realName, state.newPlayerAvatarId, pin || null, state.newPlayerGrade);
   await savePlayer(p);
   state.players.push(name);
   state.newPlayerName = '';
   state.newPlayerRealName = '';
   state.newPlayerAvatarId = null;
   state.newPlayerPin = '';
+  state.newPlayerGrade = '';
   state.showCreatePlayerModal = false;
   await enterPlayer(name, normalizePlayer(p));
   loadPlayerChips();
@@ -2276,6 +2285,89 @@ function deletePlayer(name){
     await refreshOverview();
   });
 }
+const EXAM_SUBJECTS = ['國文','英文','社會','自然','數學','公民','地理','歷史','理化','建教','作文'];
+async function coachAddExamScore(){
+  const d = state.addExamDraft;
+  const playerName = d.playerName;
+  const examName = (d.examName||'').trim();
+  if(!playerName){ showToast('請選擇球員'); return; }
+  if(!examName){ showToast('請輸入段考名稱，例如：第一次段考'); return; }
+  const scores = {};
+  let hasAny = false;
+  EXAM_SUBJECTS.forEach(sub=>{
+    const v = d.scores && d.scores[sub];
+    if(v!==undefined && v!==null && String(v).trim()!==''){ scores[sub] = Number(v); hasAny = true; }
+  });
+  if(!hasAny){ showToast('請至少輸入一科成績'); return; }
+  const p = await getPlayer(playerName);
+  if(!p) return;
+  if(!p.examScores) p.examScores = [];
+  p.examScores.push({examName, date: todayStr(), scores});
+  await savePlayer(p);
+  state.addExamDraft = {playerName: state.addExamDraft.playerName, examName:'', scores:{}};
+  showToast('已新增「'+playerName+'」的段考成績');
+  render();
+}
+async function coachDeleteExamScore(playerName, index){
+  askConfirm('確定要刪除這筆段考成績嗎？', async ()=>{
+    const p = await getPlayer(playerName);
+    if(!p || !p.examScores) return;
+    p.examScores.splice(index,1);
+    await savePlayer(p);
+    showToast('已刪除');
+    render();
+  });
+}
+async function handleFitnessImport(fileInputEl){
+  const file = fileInputEl.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      if(!rows.length){ showToast('檔案是空的或格式不對'); return; }
+      const keys = Object.keys(rows[0]);
+      const nameKey = keys.find(k=>/姓名|暱稱|名字|ID|學生/.test(k)) || keys[0];
+      const allPlayers = {};
+      for(const pname of state.players){
+        const pdata = await getPlayer(pname);
+        if(pdata) allPlayers[pname] = pdata;
+      }
+      let matched = 0; const unmatched = [];
+      for(const row of rows){
+        const rawName = String(row[nameKey]||'').trim();
+        if(!rawName) continue;
+        const player = Object.values(allPlayers).find(pd=>pd.name===rawName || pd.realName===rawName);
+        if(!player){ unmatched.push(rawName); continue; }
+        const metrics = {};
+        keys.forEach(k=>{ if(k!==nameKey && row[k]!=='') metrics[k]=row[k]; });
+        if(!player.fitnessTests) player.fitnessTests = [];
+        player.fitnessTests.push({date: todayStr(), metrics});
+        await savePlayer(player);
+        matched++;
+      }
+      showToast('匯入完成！成功比對 '+matched+' 筆'+(unmatched.length?('，'+unmatched.length+' 筆姓名沒對到：'+unmatched.join('、')):''));
+      fileInputEl.value = '';
+      render();
+    } catch(err){
+      showToast('匯入失敗，請確認檔案格式是 CSV 或 Excel', 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+async function coachDeleteFitnessTest(playerName, index){
+  askConfirm('確定要刪除這筆體能檢測紀錄嗎？', async ()=>{
+    const p = await getPlayer(playerName);
+    if(!p || !p.fitnessTests) return;
+    p.fitnessTests.splice(index,1);
+    await savePlayer(p);
+    showToast('已刪除');
+    render();
+  });
+}
 async function coachAddPlayer(){
   const d = state.coachAddPlayerDraft;
   const name = (d.name||'').trim();
@@ -2284,10 +2376,10 @@ async function coachAddPlayer(){
   if(!realName){ showToast('請填寫本名'); return; }
   if(state.players.includes(name)){ showToast('這個暱稱／ID已經有人用了'); return; }
   const avatarId = d.avatarId || (CHARACTER_ROSTER[0] && CHARACTER_ROSTER[0].id);
-  const p = defaultPlayer(name, realName, avatarId, null);
+  const p = defaultPlayer(name, realName, avatarId, null, d.grade||'');
   await savePlayer(p);
   state.players.push(name);
-  state.coachAddPlayerDraft = {name:'', realName:'', avatarId:null};
+  state.coachAddPlayerDraft = {name:'', realName:'', avatarId:null, grade:''};
   showToast('已新增球員：'+name);
   await refreshOverview();
   loadPlayerChips();
@@ -2404,6 +2496,30 @@ async function refreshOverview(){
   for(const n of names){ data.push(normalizePlayer(await getPlayer(n))); }
   overviewCache = data.filter(Boolean).sort((a,b)=> b.level-a.level || b.points-a.points);
   state.teamBoss = await getTeamBoss();
+  render();
+}
+let examScoresCache = [];
+async function refreshExamScores(){
+  const names = await listPlayers();
+  const all = [];
+  for(const n of names){
+    const p = normalizePlayer(await getPlayer(n));
+    if(!p) continue;
+    all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, grade: p.grade||'', examScores: p.examScores||[] });
+  }
+  examScoresCache = all;
+  render();
+}
+let fitnessCache = [];
+async function refreshFitnessTests(){
+  const names = await listPlayers();
+  const all = [];
+  for(const n of names){
+    const p = normalizePlayer(await getPlayer(n));
+    if(!p) continue;
+    all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, grade: p.grade||'', fitnessTests: p.fitnessTests||[] });
+  }
+  fitnessCache = all;
   render();
 }
 let journalsCache = [];
@@ -2640,6 +2756,13 @@ function renderCreatePlayerModal(){
         <div>
           <label>本名（一定要填，教練才知道是你，兌獎才對得到人）</label>
           <input type="text" value="${esc(state.newPlayerRealName)}" oninput="state.newPlayerRealName=this.value" placeholder="例如：王小明">
+        </div>
+        <div>
+          <label>年級（一定要選）</label>
+          <select onchange="state.newPlayerGrade=this.value">
+            <option value="">請選擇</option>
+            ${['國小四年級','國小五年級','國小六年級','國中一年級','國中二年級','國中三年級'].map(g=>`<option value="${g}" ${state.newPlayerGrade===g?'selected':''}>${g}</option>`).join('')}
+          </select>
         </div>
         <div>
           <label>🔒 密碼（選填，4位數字，避免別人亂動你的角色）</label>
@@ -3462,7 +3585,7 @@ function renderPlayerRole(){
         <img src="${myChar.image}" style="width:44px;height:44px;image-rendering:pixelated;border-radius:10px;border:2px solid var(--line);background:var(--bg-panel-2);flex-shrink:0;">
         <div style="min-width:0;">
           <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);">${esc(myTierTitle)}</div>
-          <div class="small-note" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.name)}（${esc(p.realName||'未填')}）</div>
+          <div class="small-note" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.name)}（${esc(p.realName||'未填')}）${p.grade?' ・ '+esc(p.grade):''}</div>
         </div>
       </div>
       <div class="stat-row" style="margin-top:10px;gap:6px;">
@@ -3495,6 +3618,24 @@ function renderPlayerRole(){
       ${p.currentMidGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 中期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentMidGoal)}</div>${p.coachReplyMid?`<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(p.coachReplyMid)}</div>`:''}</div>` : ''}
       ${p.currentLongGoal ? `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;"><div class="small-note" style="color:var(--accent-light);">📅 長期目標</div><div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(p.currentLongGoal)}</div>${p.coachReplyLong?`<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(p.coachReplyLong)}</div>`:''}</div>` : ''}
     </div>
+  </div>` : ''}
+
+  ${(p.examScores && p.examScores.length) ? `
+  <div class="panel" style="margin-top:10px;">
+    <h2 style="font-size:16px;"><span class="eyebrow">Exams</span>📝 段考成績</h2>
+    ${p.examScores.slice().reverse().map(ex=>{
+      const chips = EXAM_SUBJECTS.filter(s=>ex.scores[s]!==undefined).map(s=>`<span style="display:inline-block;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;margin:2px;font-size:12px;">${s} <b style="color:var(--accent-light);">${ex.scores[s]}</b></span>`).join('');
+      return `<div style="margin-top:8px;"><div class="small-note" style="font-weight:600;">${esc(ex.examName)} ・ ${esc(ex.date)}</div><div style="margin-top:4px;">${chips}</div></div>`;
+    }).join('')}
+  </div>` : ''}
+
+  ${(p.fitnessTests && p.fitnessTests.length) ? `
+  <div class="panel" style="margin-top:10px;">
+    <h2 style="font-size:16px;"><span class="eyebrow">Fitness</span>💪 體能檢測</h2>
+    ${p.fitnessTests.slice().reverse().map(t=>{
+      const chips = Object.entries(t.metrics||{}).map(([k,v])=>`<span style="display:inline-block;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;margin:2px;font-size:12px;">${esc(k)} <b style="color:var(--accent-light);">${esc(String(v))}</b></span>`).join('');
+      return `<div style="margin-top:8px;"><div class="small-note" style="font-weight:600;">${esc(t.date)}</div><div style="margin-top:4px;">${chips}</div></div>`;
+    }).join('')}
   </div>` : ''}
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;align-items:start;">
@@ -3944,6 +4085,76 @@ function renderCoachRole(){
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;">
       ${cards || '<div class="empty">目前還沒有任何學生資料</div>'}
     </div>`;
+  } else if(state.coachTab==='examscores'){
+    const playerOptions = state.players.map(n=>`<option value="${esc(n)}" ${state.addExamDraft.playerName===n?'selected':''}>${esc(n)}</option>`).join('');
+    const subjectInputs = EXAM_SUBJECTS.map(sub=>`
+      <div style="min-width:80px;">
+        <label style="font-size:11px;">${sub}</label>
+        <input type="number" style="width:100%;" value="${state.addExamDraft.scores[sub]!==undefined?state.addExamDraft.scores[sub]:''}" oninput="state.addExamDraft.scores['${sub}']=this.value" placeholder="分數">
+      </div>`).join('');
+    if(examScoresCache.length===0 && state.players.length>0){ refreshExamScores(); }
+    const cards = examScoresCache.map(pl=>{
+      const ch = characterById(pl.avatarId);
+      const records = (pl.examScores||[]).map((ex,idx)=>{
+        const scoreChips = EXAM_SUBJECTS.filter(s=>ex.scores[s]!==undefined).map(s=>`<span style="display:inline-block;background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:2px 6px;margin:2px;font-size:11px;">${s} ${ex.scores[s]}</span>`).join('');
+        return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;">
+          <div class="flex-between"><span style="font-size:13px;font-weight:600;">${esc(ex.examName)} <span class="small-note">${esc(ex.date)}</span></span><button class="btn secondary small" style="padding:2px 8px;font-size:10px;" onclick="coachDeleteExamScore('${esc(pl.name)}',${idx})">🗑️</button></div>
+          <div style="margin-top:4px;">${scoreChips}</div>
+        </div>`;
+      }).join('');
+      return `<div class="panel" style="background:var(--bg-panel-2);margin-top:0;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="${ch.image}" style="width:28px;height:28px;image-rendering:pixelated;border-radius:6px;">
+          <div style="font-weight:600;">${esc(pl.name)}${pl.grade?(' ・ '+esc(pl.grade)):''}</div>
+        </div>
+        ${records || '<div class="small-note" style="margin-top:6px;">尚無段考成績</div>'}
+      </div>`;
+    }).join('');
+    body = `
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">➕ 新增段考成績</h2>
+      <div class="row-flex" style="margin-top:8px;">
+        <div><label>選擇球員</label><select onchange="state.addExamDraft.playerName=this.value">
+          <option value="">請選擇</option>${playerOptions}
+        </select></div>
+        <div><label>段考名稱</label><input type="text" value="${esc(state.addExamDraft.examName)}" oninput="state.addExamDraft.examName=this.value" placeholder="例如：第一次段考"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${subjectInputs}</div>
+      <div style="margin-top:12px;"><button class="btn gold" onclick="coachAddExamScore()">新增段考成績</button></div>
+    </div>
+    <div class="flex-between"><div class="small-note">依球員分組，可以看每次段考的各科成績</div><button class="btn secondary small" onclick="examScoresCache=[];refreshExamScores();">重新整理</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;">
+      ${cards || '<div class="empty">目前還沒有任何學生資料</div>'}
+    </div>`;
+  } else if(state.coachTab==='fitness'){
+    if(fitnessCache.length===0 && state.players.length>0){ refreshFitnessTests(); }
+    const cards = fitnessCache.map(pl=>{
+      const ch = characterById(pl.avatarId);
+      const records = (pl.fitnessTests||[]).map((t,idx)=>{
+        const chips = Object.entries(t.metrics||{}).map(([k,v])=>`<span style="display:inline-block;background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:2px 6px;margin:2px;font-size:11px;">${esc(k)} ${esc(String(v))}</span>`).join('');
+        return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;">
+          <div class="flex-between"><span class="small-note">${esc(t.date)}</span><button class="btn secondary small" style="padding:2px 8px;font-size:10px;" onclick="coachDeleteFitnessTest('${esc(pl.name)}',${idx})">🗑️</button></div>
+          <div style="margin-top:4px;">${chips}</div>
+        </div>`;
+      }).join('');
+      return `<div class="panel" style="background:var(--bg-panel-2);margin-top:0;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="${ch.image}" style="width:28px;height:28px;image-rendering:pixelated;border-radius:6px;">
+          <div style="font-weight:600;">${esc(pl.name)}${pl.grade?(' ・ '+esc(pl.grade)):''}</div>
+        </div>
+        ${records || '<div class="small-note" style="margin-top:6px;">尚無體能檢測紀錄</div>'}
+      </div>`;
+    }).join('');
+    body = `
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">📥 匯入體能檢測成績</h2>
+      <div class="small-note" style="margin:6px 0 10px;">從你的行動祕書系統把體能檢測成績匯出成 CSV 或 Excel 檔案，第一欄要是球員的暱稱或本名（要跟這裡的資料一致才能對上），其他欄位可以是任何檢測項目（例如：50公尺短跑、立定跳遠、握力），系統會自動比對球員並存進紀錄。</div>
+      <input type="file" accept=".csv,.xlsx,.xls" onchange="handleFitnessImport(this)">
+    </div>
+    <div class="flex-between"><div class="small-note">依球員分組，顯示每次匯入的檢測數值</div><button class="btn secondary small" onclick="fitnessCache=[];refreshFitnessTests();">重新整理</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;">
+      ${cards || '<div class="empty">目前還沒有任何學生資料</div>'}
+    </div>`;
   } else if(state.coachTab==='bonus'){
     let rows = (state.config.bonusTasks||[]).map(t=>`
       <tr><td>${esc(t.name)}</td><td>+${t.points}</td><td><button class="btn secondary small" onclick="deleteBonusTask('${t.id}')">刪除</button></td></tr>
@@ -4020,6 +4231,7 @@ function renderCoachRole(){
         <td><img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;" title="${esc(ch.name)}"></td>
         <td>${esc(p.name)}</td>
         <td>${esc(p.realName||'—')}</td>
+        <td>${esc(p.grade||'—')}</td>
         <td>Lv.${p.level}</td>
         <td>${p.energy}</td>
         <td>${p.points}</td>
@@ -4061,14 +4273,20 @@ function renderCoachRole(){
       <div class="small-note">共 ${state.players.length} 位球員 ・ 資料為團隊共享，所有裝置即時同步</div>
       <button class="btn secondary small" onclick="refreshOverview()">重新整理</button>
     </div>
-    <table><thead><tr><th>角色</th><th>暱稱／ID</th><th>本名</th><th>等級</th><th>能量</th><th>點數</th><th>連續</th><th>正確率</th><th>兌換</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan=9 class="empty">尚無球員資料</td></tr>'}</tbody></table>
+    <table><thead><tr><th>角色</th><th>暱稱／ID</th><th>本名</th><th>年級</th><th>等級</th><th>能量</th><th>點數</th><th>連續</th><th>正確率</th><th>兌換</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan=10 class="empty">尚無球員資料</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
       <h2 style="font-size:16px;">➕ 教練直接新增球員</h2>
       <div class="small-note" style="margin-bottom:8px;">通常學生自己在選角畫面建立就好，這裡是給教練直接手動建立用（例如幫學生代辦）。</div>
       <div class="row-flex">
         <div><label>暱稱／ID</label><input type="text" value="${esc(state.coachAddPlayerDraft.name)}" oninput="state.coachAddPlayerDraft.name=this.value" placeholder="例如：小明"></div>
         <div><label>本名</label><input type="text" value="${esc(state.coachAddPlayerDraft.realName)}" oninput="state.coachAddPlayerDraft.realName=this.value" placeholder="例如：王小明"></div>
+        <div><label>年級</label>
+          <select onchange="state.coachAddPlayerDraft.grade=this.value">
+            <option value="">不指定</option>
+            ${['國小四年級','國小五年級','國小六年級','國中一年級','國中二年級','國中三年級'].map(g=>`<option value="${g}">${g}</option>`).join('')}
+          </select>
+        </div>
         <div><label>角色</label>
           <select onchange="state.coachAddPlayerDraft.avatarId=this.value">
             <option value="">預設（第一個角色）</option>
@@ -4094,6 +4312,8 @@ function renderCoachRole(){
       <div class="tab ${state.coachTab==='teamrules'?'active':''}" onclick="setCoachTab('teamrules')">隊規</div>
       <div class="tab ${state.coachTab==='journals'?'active':''}" onclick="setCoachTab('journals')">訓練日誌總覽</div>
       <div class="tab ${state.coachTab==='bonus'?'active':''}" onclick="setCoachTab('bonus')">額外任務</div>
+      <div class="tab ${state.coachTab==='examscores'?'active':''}" onclick="setCoachTab('examscores')">段考成績</div>
+      <div class="tab ${state.coachTab==='fitness'?'active':''}" onclick="setCoachTab('fitness')">體能檢測</div>
       <div class="tab ${state.coachTab==='questions'?'active':''}" onclick="setCoachTab('questions')">題庫管理</div>
       <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
     </div>
@@ -4107,7 +4327,7 @@ function setRole(r){
   if(r==='coach'){ overviewCache=[]; }
   render();
 }
-function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } render(); }
+function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } if(t==='examscores'){ examScoresCache=[]; } if(t==='fitness'){ fitnessCache=[]; } render(); }
 
 function openCoachLogin(){
   state.showCoachLogin = true;
