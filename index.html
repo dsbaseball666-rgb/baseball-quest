@@ -4536,7 +4536,7 @@ function renderCoachRole(){
 function setRole(r){
   if(r==='coach' && !state.coachUnlocked){ openCoachLogin(); return; }
   state.role=r;
-  if(r==='coach'){ overviewCache=[]; }
+  if(r==='coach'){ overviewCache=[]; stopNpcChat(); }
   render();
 }
 function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } if(t==='examscores'){ examScoresCache=[]; } if(t==='fitness'){ fitnessCache=[]; } render(); }
@@ -4560,6 +4560,7 @@ async function submitCoachLogin(){
     state.coachUnlocked = true;
     state.showCoachLogin = false;
     state.role = 'coach';
+    stopNpcChat();
     showToast('已設定教練密碼，之後用這組密碼登入教練模式');
     render();
     return;
@@ -4568,6 +4569,7 @@ async function submitCoachLogin(){
     state.coachUnlocked = true;
     state.showCoachLogin = false;
     state.role = 'coach';
+    stopNpcChat();
     render();
   } else {
     showToast('密碼不對喔');
