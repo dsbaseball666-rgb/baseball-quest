@@ -3445,25 +3445,45 @@ function renderFitnessBars(p){
     if(!groups[key]) groups[key] = [];
     groups[key].push(t);
   });
-  const sections = Object.entries(groups).map(([item, tests])=>{
+  const cards = Object.entries(groups).map(([item, tests])=>{
     const sorted = tests.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-    const values = sorted.map(t=> (t.value!==undefined && t.value!==null && !isNaN(Number(t.value))) ? Number(t.value) : null).filter(v=>v!==null);
-    const maxV = values.length ? Math.max(...values) : 0;
-    const rows = sorted.map(t=>{
+    const latest = sorted[sorted.length-1];
+    const prev = sorted.length>1 ? sorted[sorted.length-2] : null;
+    const latestVal = (latest.value!==undefined && latest.value!==null && !isNaN(Number(latest.value))) ? Number(latest.value) : null;
+    const prevVal = (prev && prev.value!==undefined && prev.value!==null && !isNaN(Number(prev.value))) ? Number(prev.value) : null;
+    const unit = latest.unit || '';
+    const lowerIsBetter = /秒|分鐘|時間/.test(unit) || /秒|分鐘/.test(item);
+    let trendHtml = '';
+    if(latestVal!==null && prevVal!==null){
+      const diff = latestVal - prevVal;
+      if(diff !== 0){
+        const improved = lowerIsBetter ? diff < 0 : diff > 0;
+        const arrow = diff > 0 ? '▲' : '▼';
+        const color = improved ? 'var(--accent-green)' : 'var(--accent-red)';
+        trendHtml = `<div style="font-size:12px;font-weight:700;color:${color};margin-top:3px;">${arrow} ${Math.abs(diff).toFixed(1)}${esc(unit)}　${improved?'進步！':'退步'}</div>`;
+      } else {
+        trendHtml = `<div style="font-size:12px;color:var(--text-dim);margin-top:3px;">與上次持平</div>`;
+      }
+    }
+    const historyRows = sorted.slice(-4).reverse().map(t=>{
       const val = (t.value!==undefined && t.value!==null && !isNaN(Number(t.value))) ? Number(t.value) : null;
-      const pct = (val!==null && maxV>0) ? Math.max(6, Math.round(val/maxV*100)) : 100;
-      const label = val!==null ? (t.value + (t.unit?(' '+t.unit):'')) : Object.entries(t.metrics||{}).map(([k,v])=>k+' '+v).join('、');
-      return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-        <div style="width:78px;flex-shrink:0;font-size:11px;" class="small-note">${esc(t.date)}</div>
-        <div class="hp-bar-outer" style="flex:1;height:14px;"><div class="hp-bar-inner" style="width:${pct}%;background:linear-gradient(90deg,#ff6b6b,#ffd166);"></div></div>
-        <div style="min-width:64px;flex-shrink:0;text-align:right;font-size:12px;font-weight:600;color:var(--accent-light);">${esc(String(label))}</div>
-      </div>`;
+      const label = val!==null ? (t.value+(t.unit?(' '+t.unit):'')) : Object.entries(t.metrics||{}).map(([k,v])=>k+' '+v).join('、');
+      return `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:3px;"><span>${esc(t.date)}</span><span>${esc(String(label))}</span></div>`;
     }).join('');
-    return `<div style="margin-top:12px;"><div class="small-note" style="font-weight:600;">${esc(item)}</div>${rows}</div>`;
+    const latestLabel = latestVal!==null ? (latest.value+(unit?(' '+unit):'')) : Object.entries(latest.metrics||{}).map(([k,v])=>k+' '+v).join('、');
+    return `<div style="background:var(--bg-panel-2);border:1px solid var(--line);border-radius:12px;padding:12px;">
+      <div class="small-note" style="font-weight:600;">${esc(item)}</div>
+      <div style="font-size:22px;font-weight:700;color:var(--accent-light);margin-top:4px;">${esc(String(latestLabel))}</div>
+      ${trendHtml}
+      ${latest.rating?`<div class="small-note" style="margin-top:2px;">評等：${esc(latest.rating)}</div>`:''}
+      <div style="margin-top:8px;border-top:1px dashed var(--line);padding-top:6px;">${historyRows}</div>
+    </div>`;
   }).join('');
   return `<div class="panel" style="margin-top:14px;">
     <h2 style="font-size:16px;"><span class="eyebrow">Fitness</span>💪 體能檢測成績</h2>
-    ${sections}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px;">
+      ${cards}
+    </div>
   </div>`;
 }
 function fitnessTestChipsHtml(t, chipStyle){
@@ -3566,13 +3586,8 @@ function renderPlayerRole(){
     ${state.showCreatePlayerModal ? renderCreatePlayerModal() : ''}
     ${state.showTeamRules ? renderTeamRulesModal() : ''}`;
     return `
-    <div class="panel" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:linear-gradient(135deg, rgba(255,209,102,0.16), rgba(42,157,143,0.08));border-color:var(--accent-light);" onclick="openTutorial()">
-      <div style="font-size:26px;">📖</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);letter-spacing:0.5px;">新手先發指南</div>
-        <div class="small-note">第一次來嗎？點這裡看完整的 8 步驟上場說明</div>
-      </div>
-      <div style="font-size:18px;color:var(--accent-light);">→</div>
+    <div style="text-align:right;margin-bottom:-4px;">
+      <button class="btn secondary small" style="border-radius:50%;width:34px;height:34px;padding:0;font-size:16px;" onclick="openTutorial()" title="新手先發指南">❓</button>
     </div>
     ${state.showTutorial ? renderTutorialModal() : ''}
 
@@ -3767,19 +3782,15 @@ function renderPlayerRole(){
     </div>`).join('') || '<div class="empty">物品欄是空的，去商店兌換點東西吧！</div>';
 
   return `
-  <div class="panel" style="padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:linear-gradient(135deg, rgba(255,209,102,0.16), rgba(42,157,143,0.08));border-color:var(--accent-light);" onclick="openTutorial()">
-    <div style="font-size:26px;">📖</div>
-    <div style="flex:1;min-width:0;">
-      <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);letter-spacing:0.5px;">新手先發指南</div>
-      <div class="small-note">第一次來嗎？點這裡看完整的 8 步驟上場說明</div>
-    </div>
-    <div style="font-size:18px;color:var(--accent-light);">→</div>
+  <div style="text-align:right;margin-bottom:-4px;">
+    <button class="btn secondary small" style="border-radius:50%;width:34px;height:34px;padding:0;font-size:16px;" onclick="openTutorial()" title="新手先發指南">❓</button>
   </div>
 
   <div class="panel" style="background:linear-gradient(135deg, rgba(255,209,102,0.14), rgba(228,87,46,0.08)); border-color:var(--accent-light);">
     <div class="flex-between" style="margin-bottom:6px;">
       <div style="font-family:var(--font-display);font-size:15px;color:var(--accent-light);letter-spacing:0.5px;">🧭 現在該做什麼？</div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        ${(state.config.bonusTasks||[]).length ? `<button class="btn secondary small" style="border-radius:50%;width:30px;height:30px;padding:0;font-size:14px;color:var(--accent-red);border-color:var(--accent-red);" onclick="state.showBonusTasksModal=true;render();" title="額外任務">❗</button>` : ''}
         <button class="btn secondary small" onclick="openPinSettings()">🔒 密碼</button>
         <button class="btn secondary small" onclick="backToPicker()">切換球員</button>
       </div>
@@ -3789,6 +3800,7 @@ function renderPlayerRole(){
       ${questHint.action ? `<button class="btn gold small" onclick="${questHint.action}">${esc(questHint.cta)} →</button>` : ''}
     </div>
   </div>
+  ${state.showBonusTasksModal ? renderBonusTasksModal() : ''}
   ${(()=>{
     const due = goalFieldsDue(p);
     const pending = [];
@@ -3886,12 +3898,6 @@ function renderPlayerRole(){
     ${state.showPathModal ? renderPathModal(itemRows, logRows, allDoneToday) : ''}
   </div>
 
-  <div class="panel" style="margin-top:14px;">
-    <h2 style="font-size:16px;"><span class="eyebrow">Bonus</span>額外任務</h2>
-    <div class="small-note" style="margin-bottom:8px;">完成後直接回報，不限次數，也不影響每日練習紀錄。</div>
-    <div class="item-list">${bonusRows}</div>
-    ${bonusHistory ? `<h2 style="margin-top:16px;font-size:16px;">最近回報</h2>${bonusHistory}` : ''}
-  </div>
   ${renderExamScoreBars(p)}
   ${renderFitnessBars(p)}`;
 }
