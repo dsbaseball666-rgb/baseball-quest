@@ -3634,6 +3634,16 @@ function renderPlayerRole(){
     <div class="monster-name" style="font-size:15px;">隊規</div>
     <div class="small-note">安全／態度／負責／禮貌／團隊</div>
   </div>`;
+  const shopTile = `<div class="panel battle-card" id="shop-panel" style="cursor:pointer;padding:14px;margin-top:0;" onclick="state.showShopModal=true;render();">
+    <div style="font-size:30px;">🏪</div>
+    <div class="monster-name" style="font-size:15px;">福利社</div>
+    <div class="small-note">💰 ${p.points} 點 ・ 點我逛逛</div>
+  </div>`;
+  const pathTile = `<div class="panel battle-card" id="path-panel" style="cursor:pointer;padding:14px;margin-top:0;" onclick="state.showPathModal=true;render();">
+    <div style="font-size:30px;">📋</div>
+    <div class="monster-name" style="font-size:15px;">修練之路</div>
+    <div class="small-note">${doneToday.size} / ${state.config.items.length} 項目已完成</div>
+  </div>`;
 
   let questHint;
   if(!allDoneToday){
@@ -3779,6 +3789,21 @@ function renderPlayerRole(){
       ${questHint.action ? `<button class="btn gold small" onclick="${questHint.action}">${esc(questHint.cta)} →</button>` : ''}
     </div>
   </div>
+  ${(()=>{
+    const due = goalFieldsDue(p);
+    const pending = [];
+    if(due.short) pending.push('短期目標');
+    if(due.mid) pending.push('中期目標');
+    if(due.long) pending.push('長期目標');
+    if(!pending.length) return '';
+    return `<div class="panel" style="background:rgba(228,87,46,0.12);border-color:var(--accent-red);margin-top:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:22px;">⚠️</div>
+        <div style="flex:1;min-width:180px;font-size:13px;color:var(--text-chalk);">你有 <b style="color:var(--accent-red);">${pending.join('、')}</b> 還沒填寫，記得去訓練日誌完成喔！</div>
+        <button class="btn secondary small" onclick="toggleItem('training_log')">前往填寫 →</button>
+      </div>
+    </div>`;
+  })()}
   ${state.showAvatarPicker ? renderAvatarPickerModal() : ''}
   ${state.showJournalForm ? renderJournalFormModal() : ''}
   ${state.showPinSettings ? renderPinSettingsModal() : ''}
@@ -3850,32 +3875,19 @@ function renderPlayerRole(){
     ${state.showSkillDetail ? renderSkillDetailModal() : ''}
 
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <div class="panel battle-card" id="shop-panel" style="cursor:pointer;padding:14px;margin-top:0;" onclick="state.showShopModal=true;render();">
-        <div style="font-size:34px;">🏪</div>
-        <div class="monster-name" style="font-size:16px;">福利社</div>
-        <div class="small-note">💰 ${p.points} 點 ・ 點我逛逛 →</div>
-      </div>
+      ${teamRulesTile}
       ${trainingLogTile}
+      ${pathTile}
       ${trialPathTile}
       ${knowledgeBaseTile}
-      ${teamRulesTile}
+      ${shopTile}
     </div>
     ${state.showShopModal ? renderShopModal(shopRows) : ''}
+    ${state.showPathModal ? renderPathModal(itemRows, logRows, allDoneToday) : ''}
   </div>
 
   <div class="panel" style="margin-top:14px;">
-    <div class="panel battle-card" id="path-panel" style="cursor:pointer;padding:16px;margin-top:0;" onclick="state.showPathModal=true;render();">
-      <div style="display:flex;align-items:center;gap:14px;">
-        <div style="font-size:40px;flex-shrink:0;">📋</div>
-        <div style="flex:1;text-align:left;min-width:0;">
-          <div class="monster-name" style="font-size:16px;">修練之路</div>
-          <div class="hp-bar-outer" style="height:8px;margin:4px 0;"><div class="hp-bar-inner" style="width:${state.config.items.length?Math.round(doneToday.size/state.config.items.length*100):0}%;background:linear-gradient(90deg,var(--accent-green),#5fd1c4);"></div></div>
-          <div class="small-note">${doneToday.size} / ${state.config.items.length} 項目已完成 ・ 點我進入修練 →</div>
-        </div>
-      </div>
-    </div>
-    ${state.showPathModal ? renderPathModal(itemRows, logRows, allDoneToday) : ''}
-    <h2 style="margin-top:16px;font-size:16px;"><span class="eyebrow">Bonus</span>額外任務</h2>
+    <h2 style="font-size:16px;"><span class="eyebrow">Bonus</span>額外任務</h2>
     <div class="small-note" style="margin-bottom:8px;">完成後直接回報，不限次數，也不影響每日練習紀錄。</div>
     <div class="item-list">${bonusRows}</div>
     ${bonusHistory ? `<h2 style="margin-top:16px;font-size:16px;">最近回報</h2>${bonusHistory}` : ''}
