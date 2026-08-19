@@ -1501,6 +1501,7 @@ let state = {
   addQDraft: {q:'', options:['','','',''], correct:0, tag:'', subTag:''},
   redeemDraft: {},
   energyAdjustDraft: {},
+  levelAdjustDraft: {},
   videoUploadedDraft: false,
   viewingPlayer: null,
   formUrlDraft: '',
@@ -2350,6 +2351,21 @@ async function adjustEnergy(name){
   await savePlayer(p);
   state.energyAdjustDraft[name] = '';
   showToast(name+' 的能量已調整為 '+p.energy+' ⚡');
+  await refreshOverview();
+}
+async function adjustLevel(name){
+  const raw = state.levelAdjustDraft[name];
+  const target = Number(raw);
+  if(!raw || isNaN(target)){ showToast('請輸入要設定的等級'); return; }
+  const p = normalizePlayer(await getPlayer(name));
+  const newLevel = Math.max(1, Math.min(MAX_LEVEL, Math.round(target)));
+  p.level = newLevel;
+  // 同步校正答對次數到這個等級的門檻，避免經驗值進度條出現負數或錯亂
+  const minCorrectForLevel = Math.ceil((newLevel-1)*EXP_PER_LEVEL/EXP_PER_CORRECT);
+  if(p.correct < minCorrectForLevel) p.correct = minCorrectForLevel;
+  await savePlayer(p);
+  state.levelAdjustDraft[name] = '';
+  showToast(name+' 的等級已調整為 Lv.'+p.level);
   await refreshOverview();
 }
 function deletePlayer(name){
@@ -4580,6 +4596,8 @@ function renderCoachRole(){
         <td>${acc}%</td>
         <td style="min-width:280px;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <input type="number" placeholder="設定等級" style="width:80px;" value="${state.levelAdjustDraft[p.name]||''}" oninput="state.levelAdjustDraft['${esc(p.name)}']=this.value">
+            <button class="btn secondary small" onclick="adjustLevel('${esc(p.name)}')">調整等級</button>
             <input type="number" placeholder="⚡能量+/-" style="width:80px;" value="${state.energyAdjustDraft[p.name]||''}" oninput="state.energyAdjustDraft['${esc(p.name)}']=this.value">
             <button class="btn secondary small" onclick="adjustEnergy('${esc(p.name)}')">調整能量</button>
             <input type="number" placeholder="點數" style="width:70px;" value="${state.redeemDraft[p.name]||''}" oninput="state.redeemDraft['${esc(p.name)}']=this.value">
