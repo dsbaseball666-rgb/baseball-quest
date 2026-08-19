@@ -440,24 +440,24 @@ function buildDefaultConfig(){
     ],
     classTiers: {
       c_swordsman: [
-        {level:1, title:'見習劍士', desc:'剛入門的劍術新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0},
-        {level:15, title:'劍鬥士', desc:'揮劍更加熟練，攻擊傷害提升', bonusDamage:8, dodgeReduction:0, bonusPoints:0},
-        {level:30, title:'劍聖', desc:'劍術大成，傷害大幅提升並更難被閃避', bonusDamage:18, dodgeReduction:0.05, bonusPoints:0}
+        {level:1, title:'見習劍士', desc:'剛入門的劍術新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0, avatarId:'c_swordsman'},
+        {level:15, title:'劍鬥士', desc:'揮劍更加熟練，攻擊傷害提升，轉職為重裝戰士', bonusDamage:8, dodgeReduction:0, bonusPoints:0, avatarId:'c_heavy'},
+        {level:30, title:'劍聖', desc:'劍術大成，傷害大幅提升並更難被閃避，轉職為槍兵', bonusDamage:18, dodgeReduction:0.05, bonusPoints:0, avatarId:'c_spearman'}
       ],
       c_mage: [
-        {level:1, title:'見習法師', desc:'剛學會魔法的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0},
-        {level:15, title:'秘法學徒', desc:'魔力增長，每次命中額外獲得點數', bonusDamage:0, dodgeReduction:0, bonusPoints:4},
-        {level:30, title:'大法師', desc:'魔法造詣爐火純青，傷害與點數都提升', bonusDamage:8, dodgeReduction:0, bonusPoints:8}
+        {level:1, title:'見習法師', desc:'剛學會魔法的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0, avatarId:'c_mage'},
+        {level:15, title:'秘法學徒', desc:'魔力增長，每次命中額外獲得點數，轉職為牧師', bonusDamage:0, dodgeReduction:0, bonusPoints:4, avatarId:'c_priest'},
+        {level:30, title:'大法師', desc:'魔法造詣爐火純青，傷害與點數都提升，轉職為騎士', bonusDamage:8, dodgeReduction:0, bonusPoints:8, avatarId:'c_knight'}
       ],
       c_archer: [
-        {level:1, title:'見習射手', desc:'剛開始練習射擊的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0},
-        {level:15, title:'神射手見習', desc:'眼力更加精準，敵人更難閃避你的攻擊', bonusDamage:0, dodgeReduction:0.08, bonusPoints:0},
-        {level:30, title:'傳說神射手', desc:'百發百中，傷害與精準度都達到巔峰', bonusDamage:10, dodgeReduction:0.15, bonusPoints:0}
+        {level:1, title:'見習射手', desc:'剛開始練習射擊的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0, avatarId:'c_archer'},
+        {level:15, title:'神射手見習', desc:'眼力更加精準，敵人更難閃避你的攻擊，轉職為盜賊', bonusDamage:0, dodgeReduction:0.08, bonusPoints:0, avatarId:'c_rogue'},
+        {level:30, title:'傳說神射手', desc:'百發百中，傷害與精準度都達到巔峰，轉職為神射手', bonusDamage:10, dodgeReduction:0.15, bonusPoints:0, avatarId:'c_sniper'}
       ],
       c_priest: [
-        {level:1, title:'見習牧師', desc:'剛開始學習祝禱的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0},
-        {level:15, title:'治療見習', desc:'祝禱更有效，每次命中額外獲得點數', bonusDamage:0, dodgeReduction:0, bonusPoints:4},
-        {level:30, title:'大祭司', desc:'祝禱大成，點數加成提升並帶來一絲敏捷', bonusDamage:0, dodgeReduction:0.06, bonusPoints:9}
+        {level:1, title:'見習牧師', desc:'剛開始學習祝禱的新手', bonusDamage:0, dodgeReduction:0, bonusPoints:0, avatarId:'c_priest'},
+        {level:15, title:'治療見習', desc:'祝禱更有效，每次命中額外獲得點數，轉職為狂戰士', bonusDamage:0, dodgeReduction:0, bonusPoints:4, avatarId:'c_berserker'},
+        {level:30, title:'大祭司', desc:'祝禱大成，點數加成提升並帶來一絲敏捷，轉職為騎士', bonusDamage:0, dodgeReduction:0.06, bonusPoints:9, avatarId:'c_knight'}
       ]
     },
     starterCharacterIds: STARTER_CHARACTER_IDS.slice(),
@@ -814,6 +814,18 @@ async function getConfig(){
     if(!parsed.bossRoster || !parsed.bossRoster.length) parsed.bossRoster = DEFAULT_BOSS_ROSTER.slice();
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
     if(!parsed.classTiers) parsed.classTiers = buildDefaultConfig().classTiers;
+    // 舊資料的轉職階級可能還沒有 avatarId（視覺轉職圖片），依等級比對從預設值補上，不會動到教練自己改過的稱號/數值
+    {
+      const defTiers = buildDefaultConfig().classTiers;
+      Object.keys(parsed.classTiers).forEach(charId=>{
+        (parsed.classTiers[charId]||[]).forEach(t=>{
+          if(!t.avatarId){
+            const defT = (defTiers[charId]||[]).find(dt=>dt.level===t.level);
+            t.avatarId = (defT && defT.avatarId) || charId;
+          }
+        });
+      });
+    }
     if(!parsed.starterCharacterIds || !parsed.starterCharacterIds.length) parsed.starterCharacterIds = STARTER_CHARACTER_IDS.slice();
     (parsed.skillRoster||[]).forEach(s=>{
       if(!s.stages || !s.stages.length){
@@ -1246,6 +1258,13 @@ function classTierNext(characterId, level){
   const tiers = classTiersFor(characterId).slice().sort((a,b)=>a.level-b.level);
   return tiers.find(t=>t.level>level) || null;
 }
+function effectiveAvatarId(p){
+  const tier = classTierCurrent(p.avatarId, p.level);
+  return (tier && tier.avatarId) || p.avatarId;
+}
+function effectiveCharacter(p){
+  return characterById(effectiveAvatarId(p)) || characterById(p.avatarId);
+}
 function classTierPathSummary(characterId){
   const tiers = classTiersFor(characterId).slice().sort((a,b)=>a.level-b.level);
   const evolutions = tiers.filter(t=>t.level>1);
@@ -1563,7 +1582,7 @@ async function loadPlayerChips(){
     const names = await listPlayers();
     const chips = await Promise.all(names.map(async n=>{
       const p = await getPlayer(n);
-      return { name:n, avatarId: p ? p.avatarId : null };
+      return { name:n, avatarId: p ? p.avatarId : null, level: p ? (p.level||1) : 1 };
     }));
     state.playerChips = chips;
     if(!state.currentPlayer) render();
@@ -2692,7 +2711,7 @@ async function refreshExamScores(){
   for(const n of names){
     const p = normalizePlayer(await getPlayer(n));
     if(!p) continue;
-    all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, grade: p.grade||'', examScores: p.examScores||[] });
+    all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level||1, grade: p.grade||'', examScores: p.examScores||[] });
   }
   examScoresCache = all;
   render();
@@ -2704,7 +2723,7 @@ async function refreshFitnessTests(){
   for(const n of names){
     const p = normalizePlayer(await getPlayer(n));
     if(!p) continue;
-    all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, grade: p.grade||'', fitnessTests: p.fitnessTests||[] });
+    all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level||1, grade: p.grade||'', fitnessTests: p.fitnessTests||[] });
   }
   fitnessCache = all;
   render();
@@ -2716,7 +2735,7 @@ async function refreshPersonalTasks(){
   for(const n of names){
     const p = normalizePlayer(await getPlayer(n));
     if(!p) continue;
-    all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, personalTasks: p.personalTasks||[] });
+    all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level||1, personalTasks: p.personalTasks||[] });
   }
   personalTasksCache = all;
   render();
@@ -2734,7 +2753,7 @@ async function refreshJournals(){
     });
     entries.sort((a,b)=> b.date.localeCompare(a.date));
     all.push({
-      name: p.name, realName: p.realName||'', avatarId: p.avatarId,
+      name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level||1,
       currentShortGoal: p.currentShortGoal, currentMidGoal: p.currentMidGoal, currentLongGoal: p.currentLongGoal,
       coachReplyShort: p.coachReplyShort, coachReplyMid: p.coachReplyMid, coachReplyLong: p.coachReplyLong,
       entries
@@ -3132,7 +3151,7 @@ function renderBattleModal(){
 
   const chips = (state.playerChips||[]).slice(0,8);
   const teamRow = chips.map(pc=>{
-    const ch = characterById(pc.avatarId);
+    const ch = effectiveCharacter(pc);
     const isMe = pc.name===state.currentPlayer;
     return `<div style="text-align:center;flex-shrink:0;${isMe?'filter:drop-shadow(0 0 6px rgba(255,209,102,0.9));':''}">
       <img src="${ch.image}" style="width:34px;height:34px;image-rendering:pixelated;">
@@ -3245,7 +3264,7 @@ function renderQuizInline(){
 function renderLeaderboardModal(){
   const rows = leaderboardCache.map((pl,i)=>{
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
-    const ch = characterById(pl.avatarId);
+    const ch = effectiveCharacter(pl);
     const isMe = pl.name===state.currentPlayer;
     return `<div class="item-row" style="cursor:default;${isMe?'border-color:var(--accent-light);background:rgba(255,209,102,0.08);':''}">
       <span style="font-family:var(--font-display);font-size:16px;width:28px;flex-shrink:0;">${medal}</span>
@@ -3445,7 +3464,7 @@ function renderPlayerLogModal(){
     else statusText = `<span style="color:var(--text-dim);">⏳ 未使用</span> <button class="btn secondary small" onclick="confirmItemUsed('${esc(p.name)}','${inv.id}')">確認使用</button>`;
     return `<tr><td>${esc(inv.itemName)}</td><td>${esc(inv.purchaseDate)}</td><td>-${inv.cost}</td><td>${statusText}</td></tr>`;
   }).join('') || '<tr><td colspan=4 class="empty">物品欄是空的</td></tr>';
-  const curChar = characterById(p.avatarId);
+  const curChar = effectiveCharacter(p);
   const avatarOptions = CHARACTER_ROSTER.map(c=>`<option value="${c.id}" ${p.avatarId===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
   return `
   <div class="modal-bg" onclick="if(event.target===this) closePlayerLog()">
@@ -3609,7 +3628,7 @@ function renderPlayerRole(){
     if((state.playerChips||[]).length){
       startNpcChat();
       npcsInner = state.playerChips.map((pc,i)=>{
-        const ch = characterById(pc.avatarId);
+        const ch = effectiveCharacter(pc);
         const chatting = state.npcChat && state.npcChat.index===i;
         const dur = (14 + (i*3.7)%10).toFixed(2);
         const delay = (-(i*4.1)%dur).toFixed(2);
@@ -3672,7 +3691,7 @@ function renderPlayerRole(){
   const totalExp = p.correct*EXP_PER_CORRECT;
   const expIntoLevel = totalExp - (p.level-1)*EXP_PER_LEVEL;
   const expPct = p.level>=MAX_LEVEL ? 100 : Math.max(0, Math.min(100, Math.round(expIntoLevel/EXP_PER_LEVEL*100)));
-  const myChar = characterById(p.avatarId);
+  const myChar = effectiveCharacter(p);
   const myTier = classTierCurrent(p.avatarId, p.level);
   const myNextTier = classTierNext(p.avatarId, p.level);
   const myTierTitle = myTier ? myTier.title : myChar.name;
@@ -4319,7 +4338,7 @@ function renderCoachRole(){
       </div>`;
     }
     const cards = journalsCache.map(pl=>{
-      const ch = characterById(pl.avatarId);
+      const ch = effectiveCharacter(pl);
       const entries = (pl.entries||[]).slice(0,5).map(e=>{
         const rows = journalFieldLabels().filter(f=>!['shortGoal','midGoal','longGoal'].includes(f.key)).map(f=>{
           const v = e.journal[f.key];
@@ -4363,7 +4382,7 @@ function renderCoachRole(){
       </div>`).join('');
     if(examScoresCache.length===0 && state.players.length>0){ refreshExamScores(); }
     const cards = examScoresCache.map(pl=>{
-      const ch = characterById(pl.avatarId);
+      const ch = effectiveCharacter(pl);
       const records = (pl.examScores||[]).map((ex,idx)=>{
         const scoreChips = EXAM_SUBJECTS.filter(s=>ex.scores[s]!==undefined).map(s=>`<span style="display:inline-block;background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:2px 6px;margin:2px;font-size:11px;">${s} ${ex.scores[s]}</span>`).join('');
         return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;">
@@ -4406,7 +4425,7 @@ function renderCoachRole(){
   } else if(state.coachTab==='fitness'){
     if(fitnessCache.length===0 && state.players.length>0){ refreshFitnessTests(); }
     const cards = fitnessCache.map(pl=>{
-      const ch = characterById(pl.avatarId);
+      const ch = effectiveCharacter(pl);
       const records = (pl.fitnessTests||[]).map((t,idx)=>{
         const chips = fitnessTestChipsHtml(t, 'display:inline-block;background:var(--bg-panel-2);border:1px solid var(--line);border-radius:8px;padding:2px 6px;margin:2px;font-size:11px;');
         return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;">
@@ -4451,7 +4470,7 @@ function renderCoachRole(){
     const playerOptionsForTask = state.players.map(n=>`<option value="${esc(n)}" ${state.assignTaskDraft.playerName===n?'selected':''}>${esc(n)}</option>`).join('');
     if(personalTasksCache.length===0 && state.players.length>0){ refreshPersonalTasks(); }
     const personalCards = personalTasksCache.filter(pl=>(pl.personalTasks||[]).length).map(pl=>{
-      const ch = characterById(pl.avatarId);
+      const ch = effectiveCharacter(pl);
       const taskRows = pl.personalTasks.map(t=>`
         <div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;">
           <div class="flex-between"><span style="font-size:13px;">${esc(t.name)} <span class="xp-tag">+${t.points}</span></span><button class="btn secondary small" style="padding:2px 8px;font-size:10px;" onclick="coachDeletePersonalTask('${esc(pl.name)}','${t.id}')">🗑️</button></div>
@@ -4548,7 +4567,7 @@ function renderCoachRole(){
     const bossKills = (boss.kills||[]).slice(0,5).map(k=>`<div class="small-note">${esc(k.date)} · 最後一擊：${esc(k.by)}</div>`).join('');
     let rows = overviewCache.map(p=>{
       const acc = (p.correct+p.wrong)>0 ? Math.round(p.correct/(p.correct+p.wrong)*100) : 0;
-      const ch = characterById(p.avatarId);
+      const ch = effectiveCharacter(p);
       return `<tr>
         <td><img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;" title="${esc(ch.name)}"></td>
         <td>${esc(p.name)}</td>
