@@ -475,6 +475,43 @@ function buildDefaultConfig(){
       {id:'sk_pr_burst', classId:'c_priest', name:'聖光爆發', desc:'花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
         {level:6, cost:15, effect:'guaranteedHit', multiplier:1},
         {level:9, cost:10, effect:'guaranteedHit', multiplier:1}
+      ]},
+      // 追加技能：讓每個職業都湊齊「三種被動屬性＋兩種主動效果」，選項更豐富
+      {id:'sk_sw_focus', classId:'c_swordsman', name:'沉著應戰', desc:'愈戰愈勇，答對額外獲得點數', type:'passive', stages:[
+        {level:5, bonusDamage:0, dodgeReduction:0, bonusPoints:2},
+        {level:8, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
+        {level:12, bonusDamage:0, dodgeReduction:0, bonusPoints:6}
+      ]},
+      {id:'sk_sw_counter', classId:'c_swordsman', name:'絕地反擊', desc:'花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
+        {level:5, cost:15, effect:'guaranteedHit', multiplier:1},
+        {level:8, cost:10, effect:'guaranteedHit', multiplier:1}
+      ]},
+      {id:'sk_mg_barrier', classId:'c_mage', name:'法力屏障', desc:'護盾環繞，Boss 對你閃避的機率隨等級降低', type:'passive', stages:[
+        {level:5, bonusDamage:0, dodgeReduction:0.08, bonusPoints:0},
+        {level:8, bonusDamage:0, dodgeReduction:0.15, bonusPoints:0},
+        {level:12, bonusDamage:0, dodgeReduction:0.22, bonusPoints:0}
+      ]},
+      {id:'sk_mg_meteor', classId:'c_mage', name:'隕石術', desc:'花點數啟動，下一次攻擊傷害倍增；等級越高越便宜、倍數越高', type:'active', stages:[
+        {level:5, cost:12, effect:'doubleDamage', multiplier:2},
+        {level:8, cost:9, effect:'doubleDamage', multiplier:2.5}
+      ]},
+      {id:'sk_ar_hunter', classId:'c_archer', name:'獵人直覺', desc:'嗅覺敏銳，答對額外獲得點數', type:'passive', stages:[
+        {level:5, bonusDamage:0, dodgeReduction:0, bonusPoints:2},
+        {level:8, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
+        {level:12, bonusDamage:0, dodgeReduction:0, bonusPoints:6}
+      ]},
+      {id:'sk_ar_piercing', classId:'c_archer', name:'破魔箭', desc:'花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
+        {level:5, cost:15, effect:'guaranteedHit', multiplier:1},
+        {level:8, cost:10, effect:'guaranteedHit', multiplier:1}
+      ]},
+      {id:'sk_pr_smite', classId:'c_priest', name:'神聖打擊', desc:'聖力灌注，攻擊傷害隨等級提升', type:'passive', stages:[
+        {level:2, bonusDamage:5, dodgeReduction:0, bonusPoints:0},
+        {level:5, bonusDamage:10, dodgeReduction:0, bonusPoints:0},
+        {level:9, bonusDamage:16, dodgeReduction:0, bonusPoints:0}
+      ]},
+      {id:'sk_pr_judgment', classId:'c_priest', name:'審判之光', desc:'花點數啟動，下一次攻擊傷害倍增；等級越高越便宜、倍數越高', type:'active', stages:[
+        {level:5, cost:12, effect:'doubleDamage', multiplier:2},
+        {level:8, cost:9, effect:'doubleDamage', multiplier:2.5}
       ]}
     ],
     classTiers: {
@@ -861,6 +898,11 @@ async function getConfig(){
         parsed.skillRoster = buildDefaultConfig().skillRoster.concat(customSkills);
       }
       parsed.skillRoster.forEach(s=>{ if(s.classId===undefined) s.classId = null; });
+      // 每次載入都補齊「內建技能庫」裡新增的技能（依 id 比對，不會動到教練自己新增或改過的技能）
+      const builtInSkillIds = new Set(parsed.skillRoster.map(s=>s.id));
+      buildDefaultConfig().skillRoster.forEach(s=>{
+        if(!builtInSkillIds.has(s.id)) parsed.skillRoster.push(s);
+      });
     }
     if(!parsed.classTiers) parsed.classTiers = buildDefaultConfig().classTiers;
     // 舊資料的轉職階級可能還沒有 avatarId（視覺轉職圖片），依等級比對從預設值補上，不會動到教練自己改過的稱號/數值
