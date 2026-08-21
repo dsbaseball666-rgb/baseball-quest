@@ -414,27 +414,65 @@ function buildDefaultConfig(){
     ultimateDamage:100,
     bossRoster: DEFAULT_BOSS_ROSTER.slice(),
     skillRoster: [
-      {id:'sk_basic', name:'扎實基本功', desc:'攻擊傷害隨等級提升', type:'passive', stages:[
+      // 劍士 c_swordsman：近戰爆發流
+      {id:'sk_sw_basic', classId:'c_swordsman', name:'扎實基本功', desc:'揮棒紮實，攻擊傷害隨等級提升', type:'passive', stages:[
         {level:2, bonusDamage:5, dodgeReduction:0, bonusPoints:0},
         {level:5, bonusDamage:10, dodgeReduction:0, bonusPoints:0},
         {level:9, bonusDamage:18, dodgeReduction:0.05, bonusPoints:0}
       ]},
-      {id:'sk_read', name:'冷靜判讀', desc:'Boss 對你閃避的機率隨等級降低', type:'passive', stages:[
+      {id:'sk_sw_guard', classId:'c_swordsman', name:'鋼鐵意志', desc:'意志堅定，Boss 對你閃避的機率隨等級降低', type:'passive', stages:[
         {level:3, bonusDamage:0, dodgeReduction:0.1, bonusPoints:0},
         {level:6, bonusDamage:0, dodgeReduction:0.18, bonusPoints:0},
         {level:10, bonusDamage:0, dodgeReduction:0.25, bonusPoints:0}
       ]},
-      {id:'sk_bonus', name:'額外獎金', desc:'每次答對的額外點數隨等級提升', type:'passive', stages:[
-        {level:4, bonusDamage:0, dodgeReduction:0, bonusPoints:2},
-        {level:7, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
-        {level:10, bonusDamage:0, dodgeReduction:0, bonusPoints:6}
-      ]},
-      {id:'sk_fullpower', name:'全力一擊', desc:'花點數啟動，下一次攻擊傷害倍增；等級越高越便宜、倍數越高', type:'active', stages:[
+      {id:'sk_sw_smash', classId:'c_swordsman', name:'全力一擊', desc:'花點數啟動，下一次攻擊傷害倍增；等級越高越便宜、倍數越高', type:'active', stages:[
         {level:4, cost:10, effect:'doubleDamage', multiplier:2},
         {level:7, cost:8, effect:'doubleDamage', multiplier:2.5},
         {level:10, cost:6, effect:'doubleDamage', multiplier:3}
       ]},
-      {id:'sk_sure', name:'必中祝福', desc:'花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
+      // 法師 c_mage：魔力點數流
+      {id:'sk_mg_element', classId:'c_mage', name:'元素親和', desc:'魔力愈發精純，攻擊傷害隨等級提升', type:'passive', stages:[
+        {level:2, bonusDamage:5, dodgeReduction:0, bonusPoints:0},
+        {level:5, bonusDamage:10, dodgeReduction:0, bonusPoints:0},
+        {level:9, bonusDamage:16, dodgeReduction:0, bonusPoints:0}
+      ]},
+      {id:'sk_mg_focus', classId:'c_mage', name:'魔力凝聚', desc:'施法愈加熟練，每次命中額外獲得點數', type:'passive', stages:[
+        {level:4, bonusDamage:0, dodgeReduction:0, bonusPoints:2},
+        {level:7, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
+        {level:10, bonusDamage:0, dodgeReduction:0, bonusPoints:7}
+      ]},
+      {id:'sk_mg_arcane', classId:'c_mage', name:'奧術印記', desc:'花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
+        {level:6, cost:15, effect:'guaranteedHit', multiplier:1},
+        {level:9, cost:10, effect:'guaranteedHit', multiplier:1}
+      ]},
+      // 弓箭手 c_archer：精準閃避流
+      {id:'sk_ar_eagle', classId:'c_archer', name:'鷹眼', desc:'眼力精準，Boss 對你閃避的機率隨等級降低', type:'passive', stages:[
+        {level:3, bonusDamage:0, dodgeReduction:0.1, bonusPoints:0},
+        {level:6, bonusDamage:0, dodgeReduction:0.18, bonusPoints:0},
+        {level:10, bonusDamage:0, dodgeReduction:0.28, bonusPoints:0}
+      ]},
+      {id:'sk_ar_barrage', classId:'c_archer', name:'疾風連射', desc:'手感愈發俐落，攻擊傷害隨等級提升', type:'passive', stages:[
+        {level:2, bonusDamage:4, dodgeReduction:0, bonusPoints:0},
+        {level:5, bonusDamage:9, dodgeReduction:0, bonusPoints:0},
+        {level:9, bonusDamage:15, dodgeReduction:0, bonusPoints:0}
+      ]},
+      {id:'sk_ar_snipe', classId:'c_archer', name:'精準狙擊', desc:'花點數啟動，下一次攻擊傷害倍增；等級越高越便宜、倍數越高', type:'active', stages:[
+        {level:4, cost:10, effect:'doubleDamage', multiplier:2},
+        {level:7, cost:8, effect:'doubleDamage', multiplier:2.5},
+        {level:10, cost:6, effect:'doubleDamage', multiplier:3}
+      ]},
+      // 牧師 c_priest：祝禱點數流
+      {id:'sk_pr_prayer', classId:'c_priest', name:'虔誠祝禱', desc:'祝禱愈加虔誠，每次命中額外獲得點數', type:'passive', stages:[
+        {level:4, bonusDamage:0, dodgeReduction:0, bonusPoints:2},
+        {level:7, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
+        {level:10, bonusDamage:0, dodgeReduction:0, bonusPoints:6}
+      ]},
+      {id:'sk_pr_blessing', classId:'c_priest', name:'聖光護體', desc:'聖光庇佑，Boss 對你閃避的機率隨等級降低', type:'passive', stages:[
+        {level:3, bonusDamage:0, dodgeReduction:0.08, bonusPoints:0},
+        {level:6, bonusDamage:0, dodgeReduction:0.15, bonusPoints:0},
+        {level:10, bonusDamage:0, dodgeReduction:0.22, bonusPoints:0}
+      ]},
+      {id:'sk_pr_burst', classId:'c_priest', name:'聖光爆發', desc:'花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
         {level:6, cost:15, effect:'guaranteedHit', multiplier:1},
         {level:9, cost:10, effect:'guaranteedHit', multiplier:1}
       ]}
@@ -814,6 +852,16 @@ async function getConfig(){
     if(parsed.ultimateDamage==null) parsed.ultimateDamage = 100;
     if(!parsed.bossRoster || !parsed.bossRoster.length) parsed.bossRoster = DEFAULT_BOSS_ROSTER.slice();
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
+    // 技能改成職業專屬：若還留著舊版「全職業共用」的預設技能，換成新的職業專屬技能組合，教練自己額外新增的技能不會被動到
+    {
+      const oldGenericIds = ['sk_basic','sk_read','sk_bonus','sk_fullpower','sk_sure'];
+      const hasOldGeneric = parsed.skillRoster.some(s=>oldGenericIds.includes(s.id) && !s.classId);
+      if(hasOldGeneric){
+        const customSkills = parsed.skillRoster.filter(s=>!oldGenericIds.includes(s.id));
+        parsed.skillRoster = buildDefaultConfig().skillRoster.concat(customSkills);
+      }
+      parsed.skillRoster.forEach(s=>{ if(s.classId===undefined) s.classId = null; });
+    }
     if(!parsed.classTiers) parsed.classTiers = buildDefaultConfig().classTiers;
     // 舊資料的轉職階級可能還沒有 avatarId（視覺轉職圖片），依等級比對從預設值補上，不會動到教練自己改過的稱號/數值
     {
@@ -1225,7 +1273,7 @@ function skillNextStage(skill, level){
   return upcoming[0] || null;
 }
 function unlockedSkills(p){
-  return (state.config.skillRoster||[]).filter(s=>!!skillCurrentStage(s, p.level));
+  return (state.config.skillRoster||[]).filter(s=>(!s.classId || s.classId===p.avatarId) && !!skillCurrentStage(s, p.level));
 }
 function skillIconFor(s){
   if(s.type==='passive'){
@@ -1328,7 +1376,7 @@ async function addSkill(){
   if(!d.name.trim()){ showToast('請輸入技能名稱'); return; }
   const id = 'sk_'+Date.now();
   const skill = {
-    id, name:d.name.trim(), desc:(d.desc||'').trim(), type: d.type,
+    id, name:d.name.trim(), desc:(d.desc||'').trim(), type: d.type, classId: d.classId||null,
     stages: []
   };
   if(d.type==='passive'){
@@ -1339,7 +1387,7 @@ async function addSkill(){
   if(!state.config.skillRoster) state.config.skillRoster = [];
   state.config.skillRoster.push(skill);
   await saveConfig(state.config);
-  state.addSkillDraft = {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'};
+  state.addSkillDraft = {name:'', desc:'', unlockLevel:2, type:'passive', classId:d.classId||null, bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'};
   showToast('已新增技能（第一階段）');
   render();
 }
@@ -1518,7 +1566,7 @@ let state = {
   attackCostDraft: null,
   ultimateDmgDraft: null,
   addBossDraft: {name:'', emoji:'', quote:''},
-  addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'},
+  addSkillDraft: {name:'', desc:'', unlockLevel:2, type:'passive', classId:null, bonusDamage:5, dodgeReductionPct:0, bonusPoints:0, cost:10, activeEffect:'doubleDamage'},
   skillStageDraft: {},
   classTierDraft: {},
   addGeoQuestionDraft: {q:'', opt0:'', opt1:'', opt2:'', opt3:'', correct:0},
@@ -3885,7 +3933,7 @@ function renderPlayerRole(){
     </div>`).join('') || '<div class="empty">教練尚未設定額外任務</div>';
   let bonusHistory = (p.bonusLog||[]).slice(0,5).map(b=>`<div class="small-note">${esc(b.date)} · ${esc(b.name)} · +${b.points}點</div>`).join('');
 
-  const allSkills = (state.config.skillRoster||[]).slice().sort((a,b)=>{
+  const allSkills = (state.config.skillRoster||[]).filter(s=>!s.classId || s.classId===p.avatarId).sort((a,b)=>{
     const la = (a.stages&&a.stages[0]?a.stages[0].level:1), lb = (b.stages&&b.stages[0]?b.stages[0].level:1);
     return la-lb;
   });
@@ -4217,10 +4265,6 @@ function renderCoachRole(){
       <div style="margin-top:12px;"><button class="btn gold" onclick="addBossTemplate()">新增 Boss</button></div>
     </div>`;
   } else if(state.coachTab==='skills'){
-    const roster = (state.config.skillRoster||[]).slice().sort((a,b)=>{
-      const la=(a.stages&&a.stages[0]?a.stages[0].level:1), lb=(b.stages&&b.stages[0]?b.stages[0].level:1);
-      return la-lb;
-    });
     function stageChipDesc(skill, st){
       if(skill.type==='passive'){
         const parts=[];
@@ -4231,7 +4275,7 @@ function renderCoachRole(){
       }
       return '💰'+st.cost+'／'+(st.effect==='doubleDamage'?('傷害x'+(st.multiplier||2)):'必中');
     }
-    let rows = roster.map(s=>{
+    function skillRowHtml(s){
       const stages = (s.stages||[]).slice().sort((a,b)=>a.level-b.level);
       const chips = stages.map(st=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-deep);border:1px solid var(--line);border-radius:12px;padding:3px 8px;margin:2px 4px 2px 0;font-size:11px;">Lv.${st.level} ${esc(stageChipDesc(s,st))}<span title="移除這個階段" style="cursor:pointer;color:var(--accent-red);" onclick="removeSkillStage('${s.id}',${st.level})">✕</span></span>`).join('');
       const sd = state.skillStageDraft[s.id] || {};
@@ -4257,14 +4301,33 @@ function renderCoachRole(){
           <button class="btn secondary small" onclick="addSkillStage('${s.id}')">＋新增進化階段</button>
         </div>
       </td><td><button class="btn secondary small" onclick="deleteSkill('${s.id}')">刪除整個技能</button></td></tr>`;
+    }
+    const roster = (state.config.skillRoster||[]).slice().sort((a,b)=>{
+      const la=(a.stages&&a.stages[0]?a.stages[0].level:1), lb=(b.stages&&b.stages[0]?b.stages[0].level:1);
+      return la-lb;
+    });
+    const classGroups = STARTER_CHARACTER_IDS.map(cid=>{
+      const ch = characterById(cid);
+      const skillsForClass = roster.filter(s=>s.classId===cid);
+      return `<h2 style="font-size:15px;margin-top:18px;display:flex;align-items:center;gap:8px;"><img src="${ch.image}" style="width:22px;height:22px;image-rendering:pixelated;">${esc(ch.name)}專屬技能</h2>
+      <table><thead><tr><th>技能與進化階段</th><th></th></tr></thead><tbody>${skillsForClass.map(skillRowHtml).join('') || '<tr><td colspan=2 class="empty">這個職業還沒有專屬技能</td></tr>'}</tbody></table>`;
     }).join('');
+    const otherSkills = roster.filter(s=>!STARTER_CHARACTER_IDS.includes(s.classId));
+    const otherGroup = otherSkills.length ? `<h2 style="font-size:15px;margin-top:18px;">🌐 全職業通用技能</h2><table><thead><tr><th>技能與進化階段</th><th></th></tr></thead><tbody>${otherSkills.map(skillRowHtml).join('')}</tbody></table>` : '';
     const d = state.addSkillDraft;
     body = `
-    <div class="small-note" style="margin-bottom:10px;">每個技能可以設定多個「進化階段」——球員等級到了就自動變成該階段的效果（被動技能自動生效；主動技能是解鎖之後可以用該階段的花費啟動）。等級是依答對題數累積，每答對 5 題升 1 級。</div>
-    <table><thead><tr><th>技能與進化階段</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=2 class="empty">尚無技能</td></tr>'}</tbody></table>
+    <div class="small-note" style="margin-bottom:10px;">每個技能都屬於特定職業，只有選了那個職業的球員看得到、用得到。每個技能可以設定多個「進化階段」——球員等級到了就自動變成該階段的效果（被動技能自動生效；主動技能是解鎖之後可以用該階段的花費啟動）。等級是依答對題數累積，每答對 5 題升 1 級。</div>
+    ${classGroups}
+    ${otherGroup}
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
       <h2 style="font-size:16px;">新增技能（會建立第一個階段，之後可以在上面表格繼續加階段）</h2>
       <div class="row-flex">
+        <div><label>所屬職業</label>
+          <select onchange="state.addSkillDraft.classId=this.value||null">
+            <option value="">🌐 全職業通用</option>
+            ${STARTER_CHARACTER_IDS.map(cid=>`<option value="${cid}" ${d.classId===cid?'selected':''}>${esc(characterById(cid).name)}專屬</option>`).join('')}
+          </select>
+        </div>
         <div><label>技能名稱</label><input type="text" value="${esc(d.name)}" oninput="state.addSkillDraft.name=this.value" placeholder="例如：全力一擊"></div>
         <div style="max-width:110px;"><label>解鎖等級</label><input type="number" value="${d.unlockLevel}" oninput="state.addSkillDraft.unlockLevel=this.value"></div>
       </div>
