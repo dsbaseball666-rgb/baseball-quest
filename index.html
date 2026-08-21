@@ -408,6 +408,7 @@ function buildDefaultConfig(){
     rewardNote:'點數可用來兌換教練準備的實體獎品，兌換規則由教練公布。',
     formUrl:'',
     penaltyPoints:30,
+    lastBackupDate:null,
     bossDodgeChance:0.2,
     attackEnergyCost:1,
     ultimateDamage:100,
@@ -839,6 +840,7 @@ async function getConfig(){
     });
     if(!parsed.formUrl) parsed.formUrl = '';
     if(parsed.coachPassword==null) parsed.coachPassword = '';
+    if(parsed.lastBackupDate===undefined) parsed.lastBackupDate = null;
     (parsed.items||[]).forEach(it=>{
       if(it.subOptions==null) it.subOptions = [];
       it.subOptions = it.subOptions.map(o=> typeof o==='string' ? {label:o, xp:5, points:0} : o);
@@ -2589,6 +2591,65 @@ async function coachDeleteFitnessTest(playerName, index){
     showToast('已刪除');
     render();
   });
+}
+async function exportFullBackup(){
+  try{
+    showToast('備份打包中，請稍候…');
+    const names = await listPlayers();
+    const players = {};
+    for(const n of names){
+      const p = await getPlayer(n);
+      if(p) players[n] = p;
+    }
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      exportedDate: todayStr(),
+      config: state.config,
+      players
+    };
+    const json = JSON.stringify(backup, null, 2);
+    const blob = new Blob([json], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '訓練競技場備份_' + todayStr() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    state.config.lastBackupDate = todayStr();
+    await saveConfig(state.config);
+    showToast('✔ 備份已下載！記得存到安全的地方（例如雲端硬碟）');
+    render();
+  }catch(e){
+    showToast('備份失敗：'+(e&&e.message?e.message:String(e)), 'err');
+  }
+}
+async function importFullBackup(fileInputEl){
+  const file = fileInputEl.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try{
+      const backup = JSON.parse(e.target.result);
+      if(!backup.config || !backup.players){ showToast('檔案格式不對，不是這個系統匯出的備份檔', 'err'); return; }
+      const playerCount = Object.keys(backup.players).length;
+      askConfirm('確定要還原這份備份嗎？備份時間：'+(backup.exportedDate||backup.exportedAt||'未知')+'，共 '+playerCount+' 位球員。這個動作會覆蓋目前所有設定與球員資料，且無法復原！', async ()=>{
+        await saveConfig(backup.config);
+        for(const name in backup.players){
+          await savePlayer(backup.players[name]);
+        }
+        state.config = await getConfig();
+        overviewCache = []; journalsCache = []; examScoresCache = []; fitnessCache = []; personalTasksCache = [];
+        showToast('✔ 已還原備份，共 '+playerCount+' 位球員');
+        render();
+      });
+    }catch(err){
+      showToast('讀取備份檔失敗，請確認檔案沒有損毀', 'err');
+    }
+    fileInputEl.value = '';
+  };
+  reader.readAsText(file);
 }
 async function coachAddPlayer(){
   const d = state.coachAddPlayerDraft;
@@ -4576,6 +4637,29 @@ function renderCoachRole(){
         <div style="flex:0;"><button class="btn gold" onclick="addQuestion()">新增題目</button></div>
       </div>
     </div>`;
+  } else if(state.coachTab==='backup'){
+    const lastBackup = state.config.lastBackupDate;
+    const isToday = lastBackup === todayStr();
+    body = `
+    <div class="panel" style="background:${isToday?'rgba(42,157,143,0.12)':'rgba(228,87,46,0.14)'};border-color:${isToday?'var(--accent-green)':'var(--accent-red)'};margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:26px;">${isToday?'✅':'⚠️'}</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;">${isToday?'今天已經備份過了！':'今天還沒有備份！'}</div>
+          <div class="small-note" style="margin-top:2px;">${lastBackup ? '最後一次備份日期：'+esc(lastBackup) : '目前還沒有備份紀錄'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">📥 立即備份</h2>
+      <div class="small-note" style="margin:6px 0 10px;">會把所有設定（項目、商店、Boss、技能、題庫……）跟所有球員的資料，打包成一個 JSON 檔案下載到你的裝置。建議備份完後把檔案存到雲端硬碟（Google Drive等）比較保險，養成每天備份一次的習慣。</div>
+      <button class="btn gold" onclick="exportFullBackup()">📥 下載備份檔案</button>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);">
+      <h2 style="font-size:16px;">📤 還原備份</h2>
+      <div class="small-note" style="margin:6px 0 10px;color:var(--accent-red);">⚠️ 還原會覆蓋目前所有設定與球員資料，且無法復原！請先確定要還原的是正確的備份檔案。</div>
+      <input type="file" accept=".json" onchange="importFullBackup(this)">
+    </div>`;
   } else {
     if(overviewCache.length===0 && state.players.length>0){ refreshOverview(); }
     const boss = state.teamBoss || {name:'烈焰黑龍', emoji:'🐉', quote:'「膽敢挑戰本座？」', hp:0, maxHp:1, bossNumber:1, kills:[]};
@@ -4659,6 +4743,14 @@ function renderCoachRole(){
   }
 
   return `
+  ${state.config.lastBackupDate!==todayStr() ? `
+  <div class="panel" style="background:rgba(228,87,46,0.14);border-color:var(--accent-red);cursor:pointer;" onclick="setCoachTab('backup');">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="font-size:22px;">⚠️</div>
+      <div style="flex:1;font-size:13px;">今天還沒有備份資料喔！點這裡前往備份，避免資料遺失。</div>
+      <div style="font-size:14px;color:var(--accent-red);">前往備份 →</div>
+    </div>
+  </div>` : ''}
   <div class="panel">
     <div class="tabs">
       <div class="tab ${state.coachTab==='items'?'active':''}" onclick="setCoachTab('items')">項目管理</div>
@@ -4675,6 +4767,7 @@ function renderCoachRole(){
       <div class="tab ${state.coachTab==='fitness'?'active':''}" onclick="setCoachTab('fitness')">體能檢測</div>
       <div class="tab ${state.coachTab==='questions'?'active':''}" onclick="setCoachTab('questions')">題庫管理</div>
       <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
+      <div class="tab ${state.coachTab==='backup'?'active':''}" onclick="setCoachTab('backup')">💾 備份</div>
     </div>
     ${body}
   </div>`;
