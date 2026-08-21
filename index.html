@@ -462,21 +462,8 @@ function buildDefaultConfig(){
         {level:10, cost:6, effect:'doubleDamage', multiplier:3}
       ]},
       // 牧師 c_priest：祝禱點數流
-      {id:'sk_pr_prayer', classId:'c_priest', name:'虔誠祝禱', desc:'祝禱愈加虔誠，每次命中額外獲得點數', type:'passive', stages:[
-        {level:4, bonusDamage:0, dodgeReduction:0, bonusPoints:2},
-        {level:7, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
-        {level:10, bonusDamage:0, dodgeReduction:0, bonusPoints:6}
-      ]},
-      {id:'sk_pr_blessing', classId:'c_priest', name:'聖光護體', desc:'聖光庇佑，Boss 對你閃避的機率隨等級降低', type:'passive', stages:[
-        {level:3, bonusDamage:0, dodgeReduction:0.08, bonusPoints:0},
-        {level:6, bonusDamage:0, dodgeReduction:0.15, bonusPoints:0},
-        {level:10, bonusDamage:0, dodgeReduction:0.22, bonusPoints:0}
-      ]},
-      {id:'sk_pr_burst', classId:'c_priest', name:'聖光爆發', desc:'花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
-        {level:6, cost:15, effect:'guaranteedHit', multiplier:1},
-        {level:9, cost:10, effect:'guaranteedHit', multiplier:1}
-      ]},
-      // 追加技能：讓每個職業都湊齊「三種被動屬性＋兩種主動效果」，選項更豐富
+      // ===== 起始職業技能（Lv1 開始，共3套×5技能）=====
+      // 追加技能：讓每個起始職業都湊齊「三種被動屬性＋兩種主動效果」，選項更豐富
       {id:'sk_sw_focus', classId:'c_swordsman', name:'沉著應戰', desc:'愈戰愈勇，答對額外獲得點數', type:'passive', stages:[
         {level:5, bonusDamage:0, dodgeReduction:0, bonusPoints:2},
         {level:8, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
@@ -504,14 +491,57 @@ function buildDefaultConfig(){
         {level:5, cost:15, effect:'guaranteedHit', multiplier:1},
         {level:8, cost:10, effect:'guaranteedHit', multiplier:1}
       ]},
-      {id:'sk_pr_smite', classId:'c_priest', name:'神聖打擊', desc:'聖力灌注，攻擊傷害隨等級提升', type:'passive', stages:[
-        {level:2, bonusDamage:5, dodgeReduction:0, bonusPoints:0},
-        {level:5, bonusDamage:10, dodgeReduction:0, bonusPoints:0},
-        {level:9, bonusDamage:16, dodgeReduction:0, bonusPoints:0}
+      // ===== Lv.15 轉職型態技能（配合職業設定的第二階轉職，技能組會疊加原本的起始技能一起變強）=====
+      {id:'sk_hv_armor', classId:'c_heavy', name:'重甲不倒', desc:'轉職重裝戰士後解鎖：一身重甲，Boss 對你閃避的機率大幅降低', type:'passive', stages:[
+        {level:15, bonusDamage:0, dodgeReduction:0.15, bonusPoints:0},
+        {level:20, bonusDamage:0, dodgeReduction:0.22, bonusPoints:0},
+        {level:26, bonusDamage:0, dodgeReduction:0.3, bonusPoints:0}
       ]},
-      {id:'sk_pr_judgment', classId:'c_priest', name:'審判之光', desc:'花點數啟動，下一次攻擊傷害倍增；等級越高越便宜、倍數越高', type:'active', stages:[
-        {level:5, cost:12, effect:'doubleDamage', multiplier:2},
-        {level:8, cost:9, effect:'doubleDamage', multiplier:2.5}
+      {id:'sk_hv_slam', classId:'c_heavy', name:'破甲重擊', desc:'轉職重裝戰士後解鎖：花點數啟動，下一次攻擊傷害倍增', type:'active', stages:[
+        {level:15, cost:12, effect:'doubleDamage', multiplier:2.5},
+        {level:20, cost:9, effect:'doubleDamage', multiplier:3}
+      ]},
+      {id:'sk_pr_prayer', classId:'c_priest', name:'虔誠祝禱', desc:'轉職牧師後解鎖：祝禱愈加虔誠，每次命中額外獲得點數', type:'passive', stages:[
+        {level:15, bonusDamage:0, dodgeReduction:0, bonusPoints:4},
+        {level:20, bonusDamage:0, dodgeReduction:0, bonusPoints:6},
+        {level:26, bonusDamage:0, dodgeReduction:0, bonusPoints:9}
+      ]},
+      {id:'sk_pr_blessing', classId:'c_priest', name:'聖光護體', desc:'轉職牧師後解鎖：聖光庇佑，Boss 對你閃避的機率隨等級降低', type:'passive', stages:[
+        {level:16, bonusDamage:0, dodgeReduction:0.1, bonusPoints:0},
+        {level:21, bonusDamage:0, dodgeReduction:0.18, bonusPoints:0},
+        {level:27, bonusDamage:0, dodgeReduction:0.25, bonusPoints:0}
+      ]},
+      {id:'sk_pr_burst', classId:'c_priest', name:'聖光爆發', desc:'轉職牧師後解鎖：花點數啟動，下一次攻擊必定命中；等級越高越便宜', type:'active', stages:[
+        {level:17, cost:14, effect:'guaranteedHit', multiplier:1},
+        {level:22, cost:9, effect:'guaranteedHit', multiplier:1}
+      ]},
+      {id:'sk_rg_shadow', classId:'c_rogue', name:'暗影步', desc:'轉職盜賊後解鎖：身法飄忽，Boss 對你閃避的機率大幅降低', type:'passive', stages:[
+        {level:15, bonusDamage:0, dodgeReduction:0.15, bonusPoints:0},
+        {level:20, bonusDamage:0, dodgeReduction:0.22, bonusPoints:0},
+        {level:26, bonusDamage:0, dodgeReduction:0.3, bonusPoints:0}
+      ]},
+      {id:'sk_rg_backstab', classId:'c_rogue', name:'背刺', desc:'轉職盜賊後解鎖：花點數啟動，下一次攻擊傷害倍增', type:'active', stages:[
+        {level:15, cost:12, effect:'doubleDamage', multiplier:2.5},
+        {level:20, cost:9, effect:'doubleDamage', multiplier:3}
+      ]},
+      // ===== Lv.30 最終轉職型態技能（威力最強）=====
+      {id:'sk_sp_thrust', classId:'c_spearman', name:'貫穿之力', desc:'轉職槍兵後解鎖：一擊貫穿，攻擊傷害大幅提升', type:'passive', stages:[
+        {level:30, bonusDamage:24, dodgeReduction:0, bonusPoints:0}
+      ]},
+      {id:'sk_sp_precise', classId:'c_spearman', name:'百步穿楊', desc:'轉職槍兵後解鎖：花點數啟動，下一次攻擊必定命中，花費低廉', type:'active', stages:[
+        {level:30, cost:6, effect:'guaranteedHit', multiplier:1}
+      ]},
+      {id:'sk_kn_honor', classId:'c_knight', name:'騎士榮耀', desc:'轉職騎士後解鎖：榮耀加身，傷害提升同時更難被閃避', type:'passive', stages:[
+        {level:30, bonusDamage:14, dodgeReduction:0.1, bonusPoints:0}
+      ]},
+      {id:'sk_kn_judge', classId:'c_knight', name:'審判打擊', desc:'轉職騎士後解鎖：花點數啟動，下一次攻擊傷害大幅倍增', type:'active', stages:[
+        {level:30, cost:8, effect:'doubleDamage', multiplier:3.5}
+      ]},
+      {id:'sk_sn_accuracy', classId:'c_sniper', name:'絕對精準', desc:'轉職神射手後解鎖：百發百中，攻擊傷害大幅提升', type:'passive', stages:[
+        {level:30, bonusDamage:24, dodgeReduction:0, bonusPoints:0}
+      ]},
+      {id:'sk_sn_final', classId:'c_sniper', name:'致命一擊', desc:'轉職神射手後解鎖：花點數啟動，下一次攻擊傷害大幅倍增', type:'active', stages:[
+        {level:30, cost:8, effect:'doubleDamage', multiplier:3.5}
       ]}
     ],
     classTiers: {
@@ -898,6 +928,21 @@ async function getConfig(){
         parsed.skillRoster = buildDefaultConfig().skillRoster.concat(customSkills);
       }
       parsed.skillRoster.forEach(s=>{ if(s.classId===undefined) s.classId = null; });
+      // 一次性修正：早期版本的牧師技能等級門檻設太低（Lv2~9），但牧師其實是Lv15才轉職解鎖的型態，
+      // 這裡把等級錯誤的舊版牧師技能重設回正確門檻，並移除已被拆分到槍兵/騎士/神射手的重複技能
+      {
+        const staleIds = ['sk_pr_smite','sk_pr_judgment'];
+        parsed.skillRoster = parsed.skillRoster.filter(s=>!staleIds.includes(s.id));
+        const fixedIds = ['sk_pr_prayer','sk_pr_blessing','sk_pr_burst'];
+        const defSkills = buildDefaultConfig().skillRoster;
+        parsed.skillRoster = parsed.skillRoster.map(s=>{
+          if(fixedIds.includes(s.id)){
+            const def = defSkills.find(ds=>ds.id===s.id);
+            if(def && (!s.stages || !s.stages.length || s.stages[0].level<15)) return JSON.parse(JSON.stringify(def));
+          }
+          return s;
+        });
+      }
       // 每次載入都補齊「內建技能庫」裡新增的技能（依 id 比對，不會動到教練自己新增或改過的技能）
       const builtInSkillIds = new Set(parsed.skillRoster.map(s=>s.id));
       buildDefaultConfig().skillRoster.forEach(s=>{
@@ -1314,8 +1359,17 @@ function skillNextStage(skill, level){
   const upcoming = (skill.stages||[]).filter(st=>st.level>level).sort((a,b)=>a.level-b.level);
   return upcoming[0] || null;
 }
+function playerClassChain(p){
+  // 回傳這位球員從Lv1到目前為止，依序經歷過的所有職業造型id（含起始職業）
+  // 例如法師轉職：Lv1 c_mage → Lv15 c_priest → Lv30 c_knight，Lv20時鏈為 [c_mage, c_priest]
+  const tiers = classTiersFor(p.avatarId).slice().sort((a,b)=>a.level-b.level);
+  const chain = [p.avatarId];
+  tiers.forEach(t=>{ if(p.level>=t.level && t.avatarId && !chain.includes(t.avatarId)) chain.push(t.avatarId); });
+  return chain;
+}
 function unlockedSkills(p){
-  return (state.config.skillRoster||[]).filter(s=>(!s.classId || s.classId===p.avatarId) && !!skillCurrentStage(s, p.level));
+  const chain = playerClassChain(p);
+  return (state.config.skillRoster||[]).filter(s=>(!s.classId || chain.includes(s.classId)) && !!skillCurrentStage(s, p.level));
 }
 function skillIconFor(s){
   if(s.type==='passive'){
@@ -3975,7 +4029,8 @@ function renderPlayerRole(){
     </div>`).join('') || '<div class="empty">教練尚未設定額外任務</div>';
   let bonusHistory = (p.bonusLog||[]).slice(0,5).map(b=>`<div class="small-note">${esc(b.date)} · ${esc(b.name)} · +${b.points}點</div>`).join('');
 
-  const allSkills = (state.config.skillRoster||[]).filter(s=>!s.classId || s.classId===p.avatarId).sort((a,b)=>{
+  const myClassChain = playerClassChain(p);
+  const allSkills = (state.config.skillRoster||[]).filter(s=>!s.classId || myClassChain.includes(s.classId)).sort((a,b)=>{
     const la = (a.stages&&a.stages[0]?a.stages[0].level:1), lb = (b.stages&&b.stages[0]?b.stages[0].level:1);
     return la-lb;
   });
@@ -4350,24 +4405,43 @@ function renderCoachRole(){
     });
     const classGroups = STARTER_CHARACTER_IDS.map(cid=>{
       const ch = characterById(cid);
-      const skillsForClass = roster.filter(s=>s.classId===cid);
-      return `<h2 style="font-size:15px;margin-top:18px;display:flex;align-items:center;gap:8px;"><img src="${ch.image}" style="width:22px;height:22px;image-rendering:pixelated;">${esc(ch.name)}專屬技能</h2>
-      <table><thead><tr><th>技能與進化階段</th><th></th></tr></thead><tbody>${skillsForClass.map(skillRowHtml).join('') || '<tr><td colspan=2 class="empty">這個職業還沒有專屬技能</td></tr>'}</tbody></table>`;
+      const tiers = classTiersFor(cid).slice().sort((a,b)=>a.level-b.level);
+      const tierSections = tiers.map(t=>{
+        const tierChar = characterById(t.avatarId) || ch;
+        const skillsForTier = roster.filter(s=>s.classId===t.avatarId);
+        return `<div style="margin-top:10px;padding:10px 12px;background:var(--bg-deep);border-radius:10px;border:1px solid var(--line);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <img src="${tierChar.image}" style="width:20px;height:20px;image-rendering:pixelated;">
+            <span style="font-weight:600;font-size:13px;">Lv.${t.level}${t.level>1?' 轉職':''}：${esc(t.title)}${t.level>1?'（'+esc(tierChar.name)+'）':''}</span>
+          </div>
+          <table><thead><tr><th>技能與進化階段</th><th></th></tr></thead><tbody>${skillsForTier.map(skillRowHtml).join('') || '<tr><td colspan=2 class="empty">這個階段還沒有專屬技能</td></tr>'}</tbody></table>
+        </div>`;
+      }).join('');
+      return `<h2 style="font-size:15px;margin-top:18px;display:flex;align-items:center;gap:8px;"><img src="${ch.image}" style="width:22px;height:22px;image-rendering:pixelated;">${esc(ch.name)}職業技能路線</h2>
+      ${tierSections}`;
     }).join('');
-    const otherSkills = roster.filter(s=>!STARTER_CHARACTER_IDS.includes(s.classId));
+    const allTierAvatarIds = STARTER_CHARACTER_IDS.reduce((acc,cid)=>{
+      classTiersFor(cid).forEach(t=>{ if(t.avatarId && !acc.includes(t.avatarId)) acc.push(t.avatarId); });
+      return acc;
+    }, []);
+    const otherSkills = roster.filter(s=>!allTierAvatarIds.includes(s.classId));
     const otherGroup = otherSkills.length ? `<h2 style="font-size:15px;margin-top:18px;">🌐 全職業通用技能</h2><table><thead><tr><th>技能與進化階段</th><th></th></tr></thead><tbody>${otherSkills.map(skillRowHtml).join('')}</tbody></table>` : '';
     const d = state.addSkillDraft;
+    const allClassIdOptions = STARTER_CHARACTER_IDS.reduce((acc,cid)=>{
+      classTiersFor(cid).forEach(t=>{ if(t.avatarId && !acc.some(o=>o.id===t.avatarId)) acc.push({id:t.avatarId, label:characterById(t.avatarId).name+(t.level>1?'（Lv.'+t.level+' 轉職）':'（起始）')}); });
+      return acc;
+    }, []);
     body = `
-    <div class="small-note" style="margin-bottom:10px;">每個技能都屬於特定職業，只有選了那個職業的球員看得到、用得到。每個技能可以設定多個「進化階段」——球員等級到了就自動變成該階段的效果（被動技能自動生效；主動技能是解鎖之後可以用該階段的花費啟動）。等級是依答對題數累積，每答對 5 題升 1 級。</div>
+    <div class="small-note" style="margin-bottom:10px;">每個技能都屬於特定職業造型，只有轉職到那個造型（含之前的造型）的球員才看得到、用得到——轉職後技能組會疊加原本的起始技能一起變強。每個技能可以設定多個「進化階段」——球員等級到了就自動變成該階段的效果（被動技能自動生效；主動技能是解鎖之後可以用該階段的花費啟動）。等級是依答對題數累積，每答對 5 題升 1 級。</div>
     ${classGroups}
     ${otherGroup}
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
       <h2 style="font-size:16px;">新增技能（會建立第一個階段，之後可以在上面表格繼續加階段）</h2>
       <div class="row-flex">
-        <div><label>所屬職業</label>
+        <div><label>所屬職業造型</label>
           <select onchange="state.addSkillDraft.classId=this.value||null">
             <option value="">🌐 全職業通用</option>
-            ${STARTER_CHARACTER_IDS.map(cid=>`<option value="${cid}" ${d.classId===cid?'selected':''}>${esc(characterById(cid).name)}專屬</option>`).join('')}
+            ${allClassIdOptions.map(o=>`<option value="${o.id}" ${d.classId===o.id?'selected':''}>${esc(o.label)}</option>`).join('')}
           </select>
         </div>
         <div><label>技能名稱</label><input type="text" value="${esc(d.name)}" oninput="state.addSkillDraft.name=this.value" placeholder="例如：全力一擊"></div>
