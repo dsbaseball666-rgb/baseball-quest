@@ -167,6 +167,16 @@
   @keyframes npcWalk{0%{left:2%;}48%{left:calc(100% - 80px);}50%{left:calc(100% - 80px);}98%{left:2%;}100%{left:2%;}}
   @keyframes npcFlip{0%{scale:1 1;}49%{scale:1 1;}50%{scale:-1 1;}99%{scale:-1 1;}100%{scale:1 1;}}
   @keyframes npcBounce{0%,100%{translate:0 0;}50%{translate:0 -4px;}}
+  /* ---- Minecraft 方塊角色走路動畫（inline SVG專用，img標籤內的SVG動畫不會播放，所以大場面改用inline svg）---- */
+  @keyframes mcSwingLegL{0%,100%{transform:rotate(22deg);}50%{transform:rotate(-22deg);}}
+  @keyframes mcSwingLegR{0%,100%{transform:rotate(-22deg);}50%{transform:rotate(22deg);}}
+  @keyframes mcSwingArmL{0%,100%{transform:rotate(-18deg);}50%{transform:rotate(18deg);}}
+  @keyframes mcBobBody{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+  .mc-legL{transform-box:fill-box;transform-origin:50% 0%;animation:mcSwingLegL 0.6s ease-in-out infinite;}
+  .mc-legR{transform-box:fill-box;transform-origin:50% 0%;animation:mcSwingLegR 0.6s ease-in-out infinite;}
+  .mc-armL{transform-box:fill-box;transform-origin:50% 0%;animation:mcSwingArmL 0.6s ease-in-out infinite;}
+  .mc-torso{transform-box:fill-box;transform-origin:50% 100%;animation:mcBobBody 0.6s ease-in-out infinite;}
+  .mc-char-svg{width:100%;height:100%;overflow:visible;}
   @keyframes npcBob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
 
   /* ===== 新手先發指南 ===== */
@@ -1183,6 +1193,54 @@ function normalizePlayer(p){
 }
 function characterById(id){
   return CHARACTER_ROSTER.find(c=>c.id===id) || CHARACTER_ROSTER[0];
+}
+// ---- Minecraft 方塊風動畫角色（inline SVG，供大場面顯示會動的造型；小圖示仍用原本的靜態圖）----
+const MC_CHAR_COLORS = {
+  c_swordsman: {skin:'#E3B48C', torso:'#2F6FB5', torsoDark:'#245A96', torsoLight:'#3C7FC9', belt:'#8A6D2B', legs:'#33475E', legsDark:'#26374A', boots:'#151515', helmet:'#33475E', emblem:'#FFD166', weapon:'sword'},
+  c_archer:    {skin:'#E3B48C', torso:'#3E8E4F', torsoDark:'#2F6E3C', torsoLight:'#4CA860', belt:'#6B4423', legs:'#3B5B3B', legsDark:'#2C452C', boots:'#151515', helmet:'#6B4423', emblem:'#8A6D2B', weapon:'bow'},
+  c_mage:      {skin:'#E3B48C', torso:'#6A3FA0', torsoDark:'#54318A', torsoLight:'#7E52B8', belt:'#3A2060', legs:'#4A2E70', legsDark:'#391F58', boots:'#1B1B1B', helmet:'#4A2E70', emblem:'#7FE3FF', weapon:'staff'},
+  c_priest:    {skin:'#E3B48C', torso:'#EDE3C8', torsoDark:'#D3C39A', torsoLight:'#FBF3DC', belt:'#C99A2E', legs:'#C9BB94', legsDark:'#AD9C6E', boots:'#8A6D2B', helmet:'#EDE3C8', emblem:'#FFD166', weapon:'staff'},
+  c_rogue:     {skin:'#C99A6B', torso:'#3A3A3A', torsoDark:'#2A2A2A', torsoLight:'#4A4A4A', belt:'#6B1F1F', legs:'#2A2A2A', legsDark:'#1A1A1A', boots:'#0F0F0F', helmet:'#2A2A2A', emblem:'#D93A3A', weapon:'sword'},
+  c_heavy:     {skin:'#C99A6B', torso:'#8A8F99', torsoDark:'#6E727A', torsoLight:'#A6ABB5', belt:'#4A4A4A', legs:'#6E727A', legsDark:'#565A61', boots:'#2A2A2A', helmet:'#8A8F99', emblem:'#FFAA00', weapon:'axe'},
+  c_berserker: {skin:'#C99A6B', torso:'#8A3A2A', torsoDark:'#6E2E20', torsoLight:'#A64A36', belt:'#3A2010', legs:'#5A3A2A', legsDark:'#432B1E', boots:'#2A1A10', helmet:'#8A3A2A', emblem:'#FFDD44', weapon:'axe'},
+  c_spearman:  {skin:'#E3B48C', torso:'#2A7D7D', torsoDark:'#1F6060', torsoLight:'#38A0A0', belt:'#8A6D2B', legs:'#2A5A5A', legsDark:'#1F4444', boots:'#151515', helmet:'#2A7D7D', emblem:'#FFD166', weapon:'spear'},
+  c_knight:    {skin:'#E3B48C', torso:'#D9C24A', torsoDark:'#B8A339', torsoLight:'#EBDA6C', belt:'#5A4A1A', legs:'#B8A339', legsDark:'#9C8A2E', boots:'#3A3A3A', helmet:'#D9C24A', emblem:'#3C7FC9', weapon:'sword'},
+  c_sniper:    {skin:'#C99A6B', torso:'#2E4A2E', torsoDark:'#213621', torsoLight:'#3B5E3B', belt:'#1A1A1A', legs:'#213621', legsDark:'#182818', boots:'#0F0F0F', helmet:'#2E4A2E', emblem:'#8AFF8A', weapon:'bow'}
+};
+function mcWeaponSvg(type, colors){
+  if(type==='bow'){
+    return `<path d="M258 155 Q290 200 258 245" stroke="#8A6D2B" stroke-width="6" fill="none"/><line x1="258" y1="155" x2="258" y2="245" stroke="#E8E8E8" stroke-width="2"/>`;
+  }
+  if(type==='staff'){
+    return `<rect x="260" y="140" width="8" height="110" fill="#5A3A1A"/><circle cx="264" cy="135" r="14" fill="${colors.emblem}" opacity="0.9"/>`;
+  }
+  if(type==='axe'){
+    return `<rect x="262" y="160" width="8" height="100" fill="#5A3A1A"/><path d="M270 165 L300 180 L296 210 L270 200 Z" fill="#C9CDD2"/>`;
+  }
+  if(type==='spear'){
+    return `<rect x="262" y="110" width="6" height="160" fill="#5A3A1A"/><path d="M259 90 L271 90 L265 60 Z" fill="#C9CDD2"/>`;
+  }
+  // default: sword
+  return `<rect x="258" y="150" width="14" height="90" fill="#C9CDD2"/><rect x="261" y="150" width="4" height="90" fill="#F2F4F6"/><rect x="248" y="236" width="34" height="10" fill="#8A6D2B"/><rect x="260" y="244" width="10" height="30" fill="#6B5320"/><rect x="255" y="270" width="20" height="10" fill="#8A6D2B"/>`;
+}
+function mcCharacterSvgMarkup(id){
+  const c = MC_CHAR_COLORS[id] || MC_CHAR_COLORS.c_swordsman;
+  return `<svg class="mc-char-svg" viewBox="0 0 380 420" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="190" cy="400" rx="70" ry="10" fill="#000000" opacity="0.3"/>
+    <g class="mc-legL"><rect x="150" y="300" width="36" height="90" fill="${c.legs}"/><rect x="150" y="300" width="36" height="10" fill="${c.legsDark}"/><rect x="150" y="378" width="36" height="14" fill="${c.boots}"/></g>
+    <g class="mc-legR"><rect x="194" y="300" width="36" height="90" fill="${c.legs}"/><rect x="194" y="300" width="36" height="10" fill="${c.legsDark}"/><rect x="194" y="378" width="36" height="14" fill="${c.boots}"/></g>
+    <g class="mc-torso">
+      <rect x="140" y="200" width="100" height="102" fill="${c.torso}"/><rect x="140" y="200" width="100" height="14" fill="${c.torsoDark}"/><rect x="140" y="280" width="100" height="14" fill="${c.belt}"/><rect x="170" y="200" width="40" height="102" fill="${c.torsoLight}"/><circle cx="190" cy="230" r="7" fill="${c.emblem}"/>
+      <g class="mc-armL"><rect x="96" y="204" width="38" height="70" fill="${c.torso}"/><rect x="96" y="204" width="38" height="12" fill="${c.torsoDark}"/><rect x="100" y="270" width="30" height="26" fill="${c.skin}"/></g>
+      <g><rect x="246" y="204" width="38" height="70" fill="${c.torso}"/><rect x="246" y="204" width="38" height="12" fill="${c.torsoDark}"/><rect x="250" y="270" width="30" height="26" fill="${c.skin}"/></g>
+      ${mcWeaponSvg(c.weapon, c)}
+      <rect x="150" y="70" width="80" height="80" fill="${c.skin}"/><rect x="150" y="70" width="80" height="24" fill="${c.helmet}"/><rect x="150" y="70" width="14" height="80" fill="${c.helmet}"/><rect x="216" y="70" width="14" height="80" fill="${c.helmet}"/><rect x="150" y="86" width="80" height="8" fill="${c.emblem}"/>
+      <rect x="168" y="108" width="10" height="10" fill="#1B1B1B"/><rect x="202" y="108" width="10" height="10" fill="#1B1B1B"/><rect x="176" y="130" width="28" height="6" fill="#B5734A"/>
+    </g>
+  </svg>`;
+}
+function mcCharAnimated(character){
+  return mcCharacterSvgMarkup(character.id);
 }
 async function getPlayer(name){
   try{
@@ -3398,8 +3456,8 @@ function renderBattleModal(){
   const teamRow = chips.map(pc=>{
     const ch = effectiveCharacter(pc);
     const isMe = pc.name===state.currentPlayer;
-    return `<div style="text-align:center;flex-shrink:0;${isMe?'filter:drop-shadow(0 0 6px rgba(255,209,102,0.9));':''}">
-      <img src="${ch.image}" style="width:34px;height:34px;image-rendering:pixelated;">
+    return `<div style="text-align:center;flex-shrink:0;width:34px;height:34px;${isMe?'filter:drop-shadow(0 0 6px rgba(255,209,102,0.9));':''}">
+      ${mcCharAnimated(ch)}
     </div>`;
   }).join('');
 
@@ -3884,7 +3942,7 @@ function renderPlayerRole(){
         return `<div class="npc-walker" style="animation:${walkName} ${dur}s linear infinite ${delay}s;">
           ${chatting ? `<div class="npc-bubble">${esc(state.npcChat.line)}</div>` : ''}
           <div style="animation:${faceName} ${dur}s linear infinite ${delay}s, npcBounce ${bounceDur}s ease-in-out infinite;">
-            <img class="npc-sprite-img" src="${ch.image}" style="${chatting?'filter:drop-shadow(0 0 6px rgba(255,209,102,0.8));':''}">
+          <div class="npc-sprite-img" style="${chatting?'filter:drop-shadow(0 0 6px rgba(255,209,102,0.8));':''}">${mcCharAnimated(ch)}</div>
           </div>
           <div class="small-note" style="font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(pc.name)}</div>
         </div>`;
@@ -4151,7 +4209,7 @@ function renderPlayerRole(){
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;align-items:start;">
     <div class="panel" style="margin-top:0;padding:14px;">
       <div style="display:flex;gap:10px;align-items:center;">
-        <img src="${myChar.image}" style="width:44px;height:44px;image-rendering:pixelated;border-radius:10px;border:2px solid var(--line);background:var(--bg-panel-2);flex-shrink:0;">
+        <div style="width:56px;height:56px;flex-shrink:0;border-radius:10px;border:2px solid var(--line);background:var(--bg-panel-2);overflow:hidden;display:flex;align-items:center;justify-content:center;">${mcCharAnimated(myChar)}</div>
         <div style="min-width:0;">
           <div style="font-family:var(--font-display);font-size:16px;color:var(--accent-light);">${esc(myTierTitle)}</div>
           <div class="small-note" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(p.name)}（${esc(p.realName||'未填')}）${p.grade?' ・ '+esc(p.grade):''}</div>
