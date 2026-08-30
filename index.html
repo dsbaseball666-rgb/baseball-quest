@@ -1730,6 +1730,7 @@ let state = {
   redeemDraft: {},
   energyAdjustDraft: {},
   levelAdjustDraft: {},
+  playerEditDraft: {},
   videoUploadedDraft: false,
   viewingPlayer: null,
   formUrlDraft: '',
@@ -2590,6 +2591,38 @@ async function adjustEnergy(name){
   state.energyAdjustDraft[name] = '';
   showToast(name+' 的能量已調整為 '+p.energy+' ⚡');
   await refreshOverview();
+}
+async function coachEditPlayer(originalName){
+  const ed = state.playerEditDraft[originalName];
+  if(!ed) return;
+  const newName = (ed.name||'').trim();
+  const newRealName = (ed.realName||'').trim();
+  const newGrade = ed.grade||'';
+  if(!newName){ showToast('暱稱／ID不能空白'); return; }
+  if(!newRealName){ showToast('本名不能空白'); return; }
+  const p = await getPlayer(originalName);
+  if(!p) { showToast('找不到這位球員，可能已被刪除'); return; }
+  if(newName !== originalName){
+    if(state.players.includes(newName)){ showToast('這個暱稱／ID已經有人用了，換一個吧'); return; }
+    p.name = newName;
+    p.realName = newRealName;
+    p.grade = newGrade;
+    await savePlayer(p);
+    await dbDelete('player:'+originalName);
+    const idx = state.players.indexOf(originalName);
+    if(idx>-1) state.players[idx] = newName;
+    if(state.currentPlayer===originalName){ state.currentPlayer = newName; if(state.playerData) state.playerData.name = newName; }
+    delete state.playerEditDraft[originalName];
+    showToast('已更新，暱稱從「'+originalName+'」改成「'+newName+'」');
+  } else {
+    p.realName = newRealName;
+    p.grade = newGrade;
+    await savePlayer(p);
+    showToast('已更新「'+newName+'」的本名／年級');
+  }
+  overviewCache = [];
+  await refreshOverview();
+  loadPlayerChips();
 }
 async function adjustLevel(name){
   const raw = state.levelAdjustDraft[name];
@@ -4954,18 +4987,26 @@ function renderCoachRole(){
     let rows = overviewCache.map(p=>{
       const acc = (p.correct+p.wrong)>0 ? Math.round(p.correct/(p.correct+p.wrong)*100) : 0;
       const ch = effectiveCharacter(p);
+      if(!state.playerEditDraft[p.name]) state.playerEditDraft[p.name] = {name:p.name, realName:p.realName||'', grade:p.grade||''};
+      const ed = state.playerEditDraft[p.name];
       return `<tr>
         <td><img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;" title="${esc(ch.name)}"></td>
-        <td>${esc(p.name)}</td>
-        <td>${esc(p.realName||'—')}</td>
-        <td>${esc(p.grade||'—')}</td>
+        <td><input type="text" style="width:90px;" value="${esc(ed.name)}" oninput="state.playerEditDraft['${esc(p.name)}'].name=this.value"></td>
+        <td><input type="text" style="width:90px;" value="${esc(ed.realName)}" oninput="state.playerEditDraft['${esc(p.name)}'].realName=this.value"></td>
+        <td>
+          <select onchange="state.playerEditDraft['${esc(p.name)}'].grade=this.value" style="min-width:100px;">
+            <option value="">未設定</option>
+            ${['國小四年級','國小五年級','國小六年級','國中一年級','國中二年級','國中三年級'].map(g=>`<option value="${g}" ${ed.grade===g?'selected':''}>${g}</option>`).join('')}
+          </select>
+        </td>
         <td>Lv.${p.level}</td>
         <td>${p.energy}</td>
         <td>${p.points}</td>
         <td>${p.streak}🔥</td>
         <td>${acc}%</td>
-        <td style="min-width:280px;">
+        <td style="min-width:320px;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn secondary small" onclick="coachEditPlayer('${esc(p.name)}')">💾 儲存暱稱/本名/年級</button>
             <input type="number" placeholder="設定等級" style="width:80px;" value="${state.levelAdjustDraft[p.name]||''}" oninput="state.levelAdjustDraft['${esc(p.name)}']=this.value">
             <button class="btn secondary small" onclick="adjustLevel('${esc(p.name)}')">調整等級</button>
             <input type="number" placeholder="⚡能量+/-" style="width:80px;" value="${state.energyAdjustDraft[p.name]||''}" oninput="state.energyAdjustDraft['${esc(p.name)}']=this.value">
