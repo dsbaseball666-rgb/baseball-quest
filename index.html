@@ -1160,7 +1160,7 @@ function defaultPlayer(name, realName, avatarId, pin, grade){
     log:[], redemptions:[], bonusLog:[], inventory:[], activeBuff:null, tutorialSeen:false,
     trialDate:null, trialCount:0, trialCorrect:0, pin: pin || null,
     currentShortGoal:null, currentMidGoal:null, currentLongGoal:null,
-    coachReplyShort:null, coachReplyMid:null, coachReplyLong:null,
+    coachReplyShort:null, coachReplyMid:null, coachReplyLong:null, lastRescueDate:null,
     grade: grade || '', examScores: [], fitnessTests: [], personalTasks: [], hp: 100
   };
 }
@@ -1195,6 +1195,7 @@ function normalizePlayer(p){
   if(!p.personalTasks) p.personalTasks = [];
   if(p.hp==null) p.hp = playerMaxHp();
   p.hp = Math.max(0, Math.min(playerMaxHp(), p.hp));
+  if(p.lastRescueDate===undefined) p.lastRescueDate = null;
   return p;
 }
 function characterById(id){
@@ -2606,6 +2607,22 @@ async function updateHpSettings(field, raw){
   showToast('已更新設定');
   render();
 }
+async function rescueTeammate(targetName){
+  const me = state.playerData;
+  if(targetName===me.name){ showToast('不能救自己喔，找其他隊友幫忙吧'); return; }
+  if(me.lastRescueDate===todayStr()){ showToast('你今天已經救援過隊友了，明天再來幫忙！'); return; }
+  const target = await getPlayer(targetName);
+  if(!target){ showToast('找不到這位隊友'); return; }
+  const maxHp = playerMaxHp();
+  if((target.hp!=null?target.hp:maxHp)>0){ showToast(targetName+' 血量還沒歸零，不需要救援喔'); return; }
+  target.hp = maxHp;
+  await savePlayer(target);
+  me.lastRescueDate = todayStr();
+  await savePlayer(me);
+  showToast('🚑 成功救援「'+targetName+'」！他的血量已經回滿了');
+  leaderboardCache = [];
+  await refreshLeaderboard();
+}
 async function healPlayer(name, toFull){
   const p = await getPlayer(name);
   if(!p) return;
@@ -3080,7 +3097,11 @@ async function refreshLeaderboard(){
   const names = await listPlayers();
   const data = [];
   for(const n of names){ data.push(normalizePlayer(await getPlayer(n))); }
-  leaderboardCache = data.filter(Boolean).sort((a,b)=> b.level-a.level || b.points-a.points).slice(0,10);
+  const sorted = data.filter(Boolean).sort((a,b)=> b.level-a.level || b.points-a.points);
+  const top10 = sorted.slice(0,10);
+  // 血量歸零需要被救援的隊友，就算排名不在前10名也一定要顯示，才能被同學看到並救援
+  const needRescue = sorted.filter(p=> (p.hp!=null?p.hp:playerMaxHp())<=0 && !top10.includes(p));
+  leaderboardCache = top10.concat(needRescue);
   render();
 }
 async function refreshOverview(){
@@ -3661,22 +3682,31 @@ function renderQuizInline(){
     ${reactionHtml}`;
 }
 function renderLeaderboardModal(){
+  const me = state.playerData;
+  const myMaxHp = playerMaxHp();
+  const alreadyRescuedToday = me.lastRescueDate === todayStr();
   const rows = leaderboardCache.map((pl,i)=>{
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
     const ch = effectiveCharacter(pl);
     const isMe = pl.name===state.currentPlayer;
-    return `<div class="item-row" style="cursor:default;${isMe?'border-color:var(--accent-light);background:rgba(255,209,102,0.08);':''}">
+    const plHp = pl.hp!=null ? pl.hp : myMaxHp;
+    const needsRescue = plHp<=0;
+    const canRescue = needsRescue && !isMe && !alreadyRescuedToday;
+    return `<div class="item-row" style="cursor:default;flex-wrap:wrap;${isMe?'border-color:var(--accent-light);background:rgba(255,209,102,0.08);':(needsRescue?'border-color:var(--accent-red);':'')}">
       <span style="font-family:var(--font-display);font-size:16px;width:28px;flex-shrink:0;">${medal}</span>
       ${ch?`<img src="${ch.image}" style="width:26px;height:26px;image-rendering:pixelated;margin-right:6px;">`:''}
-      <span>${esc(pl.name)}${isMe?' (你)':''}</span>
-      <span class="xp-tag" style="margin-left:auto;">Lv.${pl.level} ・ ${pl.points}點</span>
+      <span>${esc(pl.name)}${isMe?' (你)':''}${needsRescue?' 💀':''}</span>
+      <span class="xp-tag" style="margin-left:auto;">Lv.${pl.level} ・ ${pl.points}點 ・ ❤️${plHp}/${myMaxHp}</span>
+      ${canRescue?`<button class="btn gold small" style="width:100%;margin-top:6px;" onclick="rescueTeammate('${esc(pl.name)}')">🚑 救援這位隊友（回滿血）</button>`:''}
+      ${needsRescue && isMe?`<div class="small-note" style="width:100%;margin-top:4px;color:var(--accent-red);">你的血量歸零了，等其他隊友來救援，或請教練幫忙回復</div>`:''}
     </div>`;
   }).join('') || '<div class="empty">還沒有排名資料</div>';
   return `
   <div class="modal-bg" onclick="if(event.target===this){state.showLeaderboard=false;render();}">
     <div class="modal" style="max-width:420px;max-height:80vh;overflow-y:auto;">
       <div class="flex-between"><h3 style="margin:0;">🏆 本日排名</h3><button class="btn secondary small" onclick="state.showLeaderboard=false;render();">✕ 關閉</button></div>
-      <div class="small-note" style="margin:8px 0 12px;">依等級與點數排名，前 10 名</div>
+      <div class="small-note" style="margin:8px 0 4px;">依等級與點數排名，前 10 名</div>
+      <div class="small-note" style="margin-bottom:12px;color:${alreadyRescuedToday?'var(--text-dim)':'var(--accent-green)'};">${alreadyRescuedToday?'✔ 你今天已經救援過隊友了，明天再來幫忙！':'💡 看到隊友 💀 血量歸零，可以救他一次（每人每天限救 1 位）'}</div>
       ${rows}
     </div>
   </div>`;
