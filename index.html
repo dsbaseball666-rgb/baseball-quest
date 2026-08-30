@@ -4474,6 +4474,9 @@ function closeQuiz(){
   }
 }
 
+function subTabNav(groupTabs, current){
+  return `<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">${groupTabs.map(t=>`<button class="btn ${t.id===current?'gold':'secondary'} small" onclick="setCoachTab('${t.id}')">${t.label}</button>`).join('')}</div>`;
+}
 function renderCoachRole(){
   let body = '';
   if(state.coachTab==='items'){
@@ -4574,6 +4577,7 @@ function renderCoachRole(){
       <tr><td>${t.image?`<img src="${t.image}" style="width:40px;height:40px;image-rendering:pixelated;">`:esc(t.emoji||'')}</td><td>${esc(t.name)}</td><td>${esc(t.quote||'')}</td><td><button class="btn secondary small" onclick="deleteBossTemplate('${t.id}')">刪除</button></td></tr>
     `).join('');
     body = `
+    ${subTabNav([{id:'bossroster',label:'👹 Boss 設定'},{id:'skills',label:'✨ 技能設定'},{id:'classtiers',label:'🎖️ 職業設定'}], 'bossroster')}
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;">❤️ 戰鬥血量設定</h2>
       <div class="small-note" style="margin:6px 0 10px;">學生答錯題目時，Boss 會反擊扣血；血量歸零就不能繼續攻擊，需要教練幫忙回復（在「隊伍總覽」有回血按鈕）。</div>
@@ -4670,6 +4674,7 @@ function renderCoachRole(){
       return acc;
     }, []);
     body = `
+    ${subTabNav([{id:'bossroster',label:'👹 Boss 設定'},{id:'skills',label:'✨ 技能設定'},{id:'classtiers',label:'🎖️ 職業設定'}], 'skills')}
     <div class="small-note" style="margin-bottom:10px;">每個技能都屬於特定職業造型，只有轉職到那個造型（含之前的造型）的球員才看得到、用得到——轉職後技能組會疊加原本的起始技能一起變強。每個技能可以設定多個「進化階段」——球員等級到了就自動變成該階段的效果（被動技能自動生效；主動技能是解鎖之後可以用該階段的花費啟動）。等級是依答對題數累積，每答對 5 題升 1 級。</div>
     ${classGroups}
     ${otherGroup}
@@ -4746,6 +4751,7 @@ function renderCoachRole(){
       </div>`;
     }).join('');
     body = `
+    ${subTabNav([{id:'bossroster',label:'👹 Boss 設定'},{id:'skills',label:'✨ 技能設定'},{id:'classtiers',label:'🎖️ 職業設定'}], 'classtiers')}
     <div class="small-note" style="margin-bottom:10px;">每個角色可以設定「轉職」階級——球員選了這個角色、等級到了，會自動變成該階級的稱號與被動加成（跟技能一樣是直接變成新階級，不會疊加同角色自己的舊階級）。勾選「開放為新手可選角色」可以讓這個角色出現在球員建立/更換角色的選單裡。</div>
     ${sections}`;
   } else if(state.coachTab==='geoquestions'){
@@ -4753,6 +4759,7 @@ function renderCoachRole(){
     let rows = gq.map(q=>`<tr><td>${esc(q.q)}</td><td>${esc(q.options[q.correct])}</td><td><button class="btn secondary small" onclick="deleteGeoQuestion('${q.id}')">刪除</button></td></tr>`).join('');
     const d = state.addGeoQuestionDraft;
     body = `
+    ${subTabNav([{id:'geoquestions',label:'🧭 試煉之路題庫'},{id:'questions',label:'⚾ 棒球題庫管理'}], 'geoquestions')}
     <div class="small-note" style="margin-bottom:10px;">這是「試煉之路」項目專屬的獨立題庫，完全跟棒球題庫、Boss 戰鬥分開——學生勾選試煉之路時，會直接從這裡隨機抽一題作答，答對才算完成，不會出現在 Boss 攻擊的題目池裡。</div>
     <table><thead><tr><th>題目</th><th>正解</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=3 class="empty">尚無題目</td></tr>'}</tbody></table>
     <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
@@ -5026,6 +5033,7 @@ function renderCoachRole(){
       </div>`;
     }
     body = `
+    ${subTabNav([{id:'geoquestions',label:'🧭 試煉之路題庫'},{id:'questions',label:'⚾ 棒球題庫管理'}], 'questions')}
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <div class="small-note" style="margin-bottom:8px;">教練提供的「棒球認知測驗」選擇題（5 題）可以直接匯入題庫，不會動到你原本的項目或其他題目。</div>
       <button class="btn secondary" onclick="importExamQuestions()">📥 匯入棒球認知測驗選擇題</button>
@@ -5088,7 +5096,10 @@ function renderCoachRole(){
       if(!state.playerEditDraft[p.name]) state.playerEditDraft[p.name] = {name:p.name, realName:p.realName||'', grade:p.grade||''};
       const ed = state.playerEditDraft[p.name];
       return `<tr>
-        <td><img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;" title="${esc(ch.name)}"></td>
+        <td style="text-align:center;">
+          <img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;" title="${esc(ch.name)}"><br>
+          <button class="btn gold small" style="margin-top:4px;padding:3px 8px;font-size:10px;white-space:nowrap;" onclick="coachEditPlayer('${esc(p.name)}')">💾 儲存</button>
+        </td>
         <td><input type="text" style="width:90px;" value="${esc(ed.name)}" oninput="state.playerEditDraft['${esc(p.name)}'].name=this.value"></td>
         <td><input type="text" style="width:90px;" value="${esc(ed.realName)}" oninput="state.playerEditDraft['${esc(p.name)}'].realName=this.value"></td>
         <td>
@@ -5103,9 +5114,8 @@ function renderCoachRole(){
         <td>${p.points}</td>
         <td>${p.streak}🔥</td>
         <td>${acc}%</td>
-        <td style="min-width:320px;">
+        <td style="min-width:280px;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn secondary small" onclick="coachEditPlayer('${esc(p.name)}')">💾 儲存暱稱/本名/年級</button>
             <input type="number" placeholder="設定等級" style="width:80px;" value="${state.levelAdjustDraft[p.name]||''}" oninput="state.levelAdjustDraft['${esc(p.name)}']=this.value">
             <button class="btn secondary small" onclick="adjustLevel('${esc(p.name)}')">調整等級</button>
             <input type="number" placeholder="⚡能量+/-" style="width:80px;" value="${state.energyAdjustDraft[p.name]||''}" oninput="state.energyAdjustDraft['${esc(p.name)}']=this.value">
@@ -5182,21 +5192,18 @@ function renderCoachRole(){
   </div>` : ''}
   <div class="panel">
     <div class="tabs">
-      <div class="tab ${state.coachTab==='items'?'active':''}" onclick="setCoachTab('items')">項目管理</div>
-      <div class="tab ${state.coachTab==='shop'?'active':''}" onclick="setCoachTab('shop')">商店管理</div>
-      <div class="tab ${state.coachTab==='bossroster'?'active':''}" onclick="setCoachTab('bossroster')">Boss 設定</div>
-      <div class="tab ${state.coachTab==='skills'?'active':''}" onclick="setCoachTab('skills')">技能設定</div>
-      <div class="tab ${state.coachTab==='classtiers'?'active':''}" onclick="setCoachTab('classtiers')">職業設定</div>
-      <div class="tab ${state.coachTab==='geoquestions'?'active':''}" onclick="setCoachTab('geoquestions')">試煉之路題庫</div>
-      <div class="tab ${state.coachTab==='knowledgebase'?'active':''}" onclick="setCoachTab('knowledgebase')">防護知識庫</div>
-      <div class="tab ${state.coachTab==='teamrules'?'active':''}" onclick="setCoachTab('teamrules')">隊規</div>
+      <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
       <div class="tab ${state.coachTab==='journals'?'active':''}" onclick="setCoachTab('journals')">訓練日誌總覽</div>
       <div class="tab ${state.coachTab==='bonus'?'active':''}" onclick="setCoachTab('bonus')">額外任務</div>
-      <div class="tab ${state.coachTab==='examscores'?'active':''}" onclick="setCoachTab('examscores')">段考成績</div>
       <div class="tab ${state.coachTab==='fitness'?'active':''}" onclick="setCoachTab('fitness')">體能檢測</div>
-      <div class="tab ${state.coachTab==='questions'?'active':''}" onclick="setCoachTab('questions')">題庫管理</div>
-      <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
+      <div class="tab ${state.coachTab==='examscores'?'active':''}" onclick="setCoachTab('examscores')">段考成績</div>
+      <div class="tab ${['bossroster','skills','classtiers'].includes(state.coachTab)?'active':''}" onclick="setCoachTab('bossroster')">Boss／技能／職業設定</div>
+      <div class="tab ${['geoquestions','questions'].includes(state.coachTab)?'active':''}" onclick="setCoachTab('geoquestions')">題庫（試煉之路＋棒球）</div>
+      <div class="tab ${state.coachTab==='knowledgebase'?'active':''}" onclick="setCoachTab('knowledgebase')">防護知識庫</div>
+      <div class="tab ${state.coachTab==='teamrules'?'active':''}" onclick="setCoachTab('teamrules')">隊規</div>
       <div class="tab ${state.coachTab==='backup'?'active':''}" onclick="setCoachTab('backup')">💾 備份</div>
+      <div class="tab ${state.coachTab==='items'?'active':''}" onclick="setCoachTab('items')">項目管理</div>
+      <div class="tab ${state.coachTab==='shop'?'active':''}" onclick="setCoachTab('shop')">商店管理</div>
     </div>
     ${body}
   </div>`;
