@@ -2043,9 +2043,19 @@ function closeGeoChallenge(){
 async function submitJournalForm(){
   const itemId = state.showJournalForm;
   const d = state.journalFormDraft || {};
-  if(!d.satisfaction || !d.focus){ showToast('請至少完成「滿意度」與「專注度自評」'); return; }
   const p = state.playerData;
   const due = goalFieldsDue(p);
+  const missing = [];
+  if(!d.satisfaction) missing.push('滿意度');
+  if(!(d.improve||'').trim()) missing.push('這週想改善的地方');
+  if(!d.focus) missing.push('專注度自評');
+  if(!d.goalMet) missing.push('有沒有達成目標');
+  if(!(d.goalNote||'').trim()) missing.push('目標達成情況說明');
+  if(due.short && !(d.shortGoal||'').trim()) missing.push('短期目標');
+  if(due.mid && !(d.midGoal||'').trim()) missing.push('中期目標');
+  if(due.long && !(d.longGoal||'').trim()) missing.push('長期目標');
+  if(!(d.messageToCoach||'').trim()) missing.push('想對教練說的話');
+  if(missing.length){ showToast('請填寫完整：'+missing.join('、')); return; }
   const journal = {
     satisfaction: d.satisfaction,
     improve: (d.improve||'').trim(),
@@ -3381,7 +3391,7 @@ function renderJournalFormModal(){
         </select>
       </div>
       <div style="margin-bottom:12px;">
-        <label>目標達成情況說明（選填）</label>
+        <label>目標達成情況說明</label>
         <input type="text" value="${esc(d.goalNote||'')}" oninput="state.journalFormDraft.goalNote=this.value" placeholder="簡單說明一下">
       </div>
       ${due.short ? `
@@ -3400,7 +3410,7 @@ function renderJournalFormModal(){
         <textarea rows="2" oninput="state.journalFormDraft.longGoal=this.value" placeholder="這一個月想達成什麼目標？">${esc(d.longGoal||'')}</textarea>
       </div>` : ''}
       <div style="margin-bottom:12px;">
-        <label>想對教練說的話（選填）</label>
+        <label>想對教練說的話</label>
         <textarea rows="2" oninput="state.journalFormDraft.messageToCoach=this.value" placeholder="有什麼想讓教練知道的嗎？">${esc(d.messageToCoach||'')}</textarea>
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;">
