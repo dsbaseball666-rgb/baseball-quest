@@ -458,6 +458,11 @@ function buildDefaultConfig(){
       {id:'sp_6', name:'神秘小禮物', weight:5, pointsValue:0, color:'#3A8A8A'},
       {id:'sp_7', name:'100 點數', weight:2, pointsValue:100, color:'#E39C2A'}
     ],
+    event: {
+      active:false, name:'', startTime:null,
+      bossName:'', bossEmoji:'🔥', bossHp:0, bossMaxHp:0,
+      participants:[], log:[]
+    },
     skillRoster: [
       // 劍士 c_swordsman：近戰爆發流
       {id:'sk_sw_basic', classId:'c_swordsman', name:'扎實基本功', desc:'揮棒紮實，攻擊傷害隨等級提升', type:'passive', stages:[
@@ -1024,6 +1029,9 @@ async function getConfig(){
     if(parsed.playerMaxHp==null) parsed.playerMaxHp = 100;
     if(parsed.bossAttackDamage==null) parsed.bossAttackDamage = 10;
     if(!parsed.spinPrizes) parsed.spinPrizes = buildDefaultConfig().spinPrizes;
+    if(!parsed.event) parsed.event = buildDefaultConfig().event;
+    if(!parsed.event.participants) parsed.event.participants = [];
+    if(!parsed.event.log) parsed.event.log = [];
     (parsed.items||[]).forEach(it=>{
       if(it.subOptions==null) it.subOptions = [];
       it.subOptions = it.subOptions.map(o=> typeof o==='string' ? {label:o, xp:5, points:0} : o);
@@ -1758,6 +1766,9 @@ let state = {
   addSpinPrizeDraft: {name:'', weight:10, pointsValue:0},
   spinTicketDraft: {},
   suppressRender: false,
+  eventSetupDraft: {name:'', startTime:'', bossName:'', bossEmoji:'🔥', bossHp:100},
+  eventDamageDraft: {},
+  showEventLobby: false,
   videoUploadedDraft: false,
   viewingPlayer: null,
   formUrlDraft: '',
@@ -2747,6 +2758,88 @@ async function coachGrantSpinTickets(name, isAll){
   }
   state.spinTicketDraft[isAll?'__all__':name] = '';
   render();
+}
+/* ---- 團隊活動大廳 ---- */
+async function coachSaveEventSetup(){
+  const d = state.eventSetupDraft;
+  if(!d.name.trim()){ showToast('請輸入活動名稱'); return; }
+  if(!d.startTime){ showToast('請設定活動開始時間'); return; }
+  if(!d.bossName.trim()){ showToast('請輸入活動 Boss 名稱'); return; }
+  const maxHp = Number(d.bossHp)||100;
+  state.config.event = {
+    active: state.config.event.active||false,
+    name: d.name.trim(),
+    startTime: d.startTime,
+    bossName: d.bossName.trim(),
+    bossEmoji: d.bossEmoji||'🔥',
+    bossHp: maxHp,
+    bossMaxHp: maxHp,
+    participants: state.config.event.participants||[],
+    log: state.config.event.log||[]
+  };
+  await saveConfig(state.config);
+  showToast('活動設定已儲存！記得到下面加入參加的選手，並在時間到時按「開始活動」');
+  render();
+}
+async function coachToggleEventParticipant(name){
+  const ev = state.config.event;
+  const idx = ev.participants.indexOf(name);
+  if(idx>-1) ev.participants.splice(idx,1);
+  else ev.participants.push(name);
+  await saveConfig(state.config);
+  render();
+}
+async function coachStartEvent(){
+  const ev = state.config.event;
+  if(!ev.name){ showToast('請先設定活動內容'); return; }
+  if(!ev.participants.length){ showToast('請至少加入一位參加的選手'); return; }
+  ev.active = true;
+  ev.bossHp = ev.bossMaxHp;
+  ev.log = [];
+  await saveConfig(state.config);
+  showToast('🎪 活動已開始！參加的選手打開 App 就會看到活動大廳');
+  render();
+}
+async function coachEndEvent(){
+  askConfirm('確定要結束這場活動嗎？活動大廳會關閉，Boss血量紀錄會保留在紀錄裡。', async ()=>{
+    state.config.event.active = false;
+    await saveConfig(state.config);
+    showToast('活動已結束');
+    render();
+  });
+}
+async function coachApplyEventDamage(name){
+  const d = state.eventDamageDraft[name] || {};
+  const dmgToBoss = Number(d.toBoss)||0;
+  const dmgTaken = Number(d.taken)||0;
+  if(dmgToBoss<=0 && dmgTaken<=0){ showToast('請至少輸入一項傷害數值'); return; }
+  const ev = state.config.event;
+  if(dmgToBoss>0){
+    ev.bossHp = Math.max(0, ev.bossHp - dmgToBoss);
+  }
+  ev.log = ev.log || [];
+  ev.log.unshift({date:todayStr(), name, dmgToBoss, dmgTaken});
+  ev.log = ev.log.slice(0,50);
+  await saveConfig(state.config);
+  if(dmgTaken>0){
+    const pl = await getPlayer(name);
+    if(pl){
+      pl.hp = Math.max(0, (pl.hp!=null?pl.hp:playerMaxHp()) - dmgTaken);
+      await savePlayer(pl);
+    }
+  }
+  state.eventDamageDraft[name] = {};
+  showToast('已套用「'+name+'」的傷害紀錄');
+  eventParticipantsCache = [];
+  await refreshEventParticipants();
+}
+function eventStartsSoon(){
+  const ev = state.config.event;
+  if(!ev || !ev.startTime) return false;
+  const start = new Date(ev.startTime).getTime();
+  const now = Date.now();
+  const diffMin = (start-now)/60000;
+  return diffMin>=-120 && diffMin<=30; // 開始前30分鐘～開始後120分鐘內都提示
 }
 async function rescueTeammate(targetName){
   const me = state.playerData;
@@ -3853,6 +3946,50 @@ function renderLeaderboardModal(){
     </div>
   </div>`;
 }
+function renderEventLobbyModal(){
+  const ev = state.config.event || {};
+  const p = state.playerData;
+  const bossPct = ev.bossMaxHp ? Math.max(0,Math.round(ev.bossHp/ev.bossMaxHp*100)) : 0;
+  if(eventParticipantsCache.length===0 && (ev.participants||[]).length>0){ refreshEventParticipants(); }
+  const rows = eventParticipantsCache.map(pl=>{
+    const hp = pl.hp!=null ? pl.hp : playerMaxHp();
+    const hpPct = Math.max(0,Math.round(hp/playerMaxHp()*100));
+    const isMe = pl.name===state.currentPlayer;
+    const ch = effectiveCharacter(pl);
+    return `<div class="item-row" style="cursor:default;flex-wrap:wrap;${isMe?'border-color:var(--accent-light);':''}">
+      <img src="${ch.image}" style="width:24px;height:24px;image-rendering:pixelated;margin-right:6px;">
+      <span>${esc(pl.name)}${isMe?' (你)':''}${hp<=0?' 💀':''}</span>
+      <div style="width:100%;margin-top:4px;"><div class="hp-bar-outer" style="height:8px;"><div class="hp-bar-inner" style="width:${hpPct}%;background:${hpPct<=25?'linear-gradient(90deg,#8a1f1f,#D93A3A)':'linear-gradient(90deg,#3A8A4A,#4CAF50)'};"></div></div></div>
+    </div>`;
+  }).join('') || '<div class="empty">尚無參加者資料</div>';
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){state.showEventLobby=false;render();}">
+    <div class="modal" style="max-width:420px;max-height:85vh;overflow-y:auto;">
+      <div class="flex-between"><h3 style="margin:0;">🎪 ${esc(ev.name||'團隊活動')}</h3><button class="btn secondary small" onclick="state.showEventLobby=false;render();">✕ 關閉</button></div>
+      <div class="small-note" style="margin:8px 0 12px;">全隊一起挑戰活動 Boss！教練會依大家的表現，現場輸入造成的傷害跟受到的傷害，密切留意血條變化。</div>
+      <div class="panel" style="background:var(--bg-panel-2);text-align:center;">
+        <div style="font-size:44px;">${esc(ev.bossEmoji||'🔥')}</div>
+        <div class="monster-name" style="font-size:16px;">${esc(ev.bossName||'活動 Boss')}</div>
+        <div class="hp-bar-outer" style="max-width:280px;"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
+        <div class="small-note">HP ${ev.bossHp||0} / ${ev.bossMaxHp||0}</div>
+      </div>
+      <h3 style="font-size:14px;margin-top:14px;">👥 參加隊員血量</h3>
+      ${rows}
+      <div class="small-note" style="margin-top:10px;text-align:center;">💪 認真做好每一次動作，幫全隊一起打倒 Boss！</div>
+    </div>
+  </div>`;
+}
+let eventParticipantsCache = [];
+async function refreshEventParticipants(){
+  const ev = state.config.event || {};
+  const data = [];
+  for(const n of (ev.participants||[])){
+    const p = normalizePlayer(await getPlayer(n));
+    if(p) data.push(p);
+  }
+  eventParticipantsCache = data;
+  render();
+}
 function renderSpinWheelModal(){
   const p = state.playerData;
   const prizes = state.config.spinPrizes || [];
@@ -4484,6 +4621,29 @@ function renderPlayerRole(){
   </div>
   ${state.showBonusTasksModal ? renderBonusTasksModal() : ''}
   ${state.showSpinWheel ? renderSpinWheelModal() : ''}
+  ${(()=>{
+    const ev = state.config.event;
+    const isParticipant = ev && (ev.participants||[]).includes(p.name);
+    if(!isParticipant) return '';
+    if(ev.active){
+      return `<div class="panel" style="background:rgba(42,157,143,0.15);border-color:var(--accent-green);margin-top:10px;cursor:pointer;" onclick="state.showEventLobby=true;render();">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:24px;">🎪</div>
+          <div style="flex:1;"><div style="font-weight:600;">活動「${esc(ev.name)}」進行中！</div><div class="small-note">點我進入活動大廳</div></div>
+          <div style="font-size:16px;color:var(--accent-green);">進入 →</div>
+        </div>
+      </div>`;
+    }
+    if(ev.startTime && eventStartsSoon()){
+      const diffMin = Math.round((new Date(ev.startTime).getTime()-Date.now())/60000);
+      const text = diffMin>0 ? ('⏰ 距離活動「'+ev.name+'」開始還有 '+diffMin+' 分鐘，記得準時上線！') : ('⏰ 活動「'+ev.name+'」即將開始，請留意教練指示！');
+      return `<div class="panel" style="background:rgba(255,209,102,0.15);border-color:var(--accent-light);margin-top:10px;">
+        <div style="font-size:13px;">${esc(text)}</div>
+      </div>`;
+    }
+    return '';
+  })()}
+  ${state.showEventLobby ? renderEventLobbyModal() : ''}
   ${(()=>{
     const due = goalFieldsDue(p);
     const pending = [];
@@ -5273,6 +5433,59 @@ function renderCoachRole(){
         <div style="flex:0;"><button class="btn gold" onclick="coachGrantSpinTickets(null, true)">🎟️ 發放給全體球員</button></div>
       </div>
     </div>`;
+  } else if(state.coachTab==='event'){
+    const ev = state.config.event || {};
+    const bossPct = ev.bossMaxHp ? Math.max(0,Math.round(ev.bossHp/ev.bossMaxHp*100)) : 0;
+    const startLocal = ev.startTime ? new Date(ev.startTime).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '尚未設定';
+    if(eventParticipantsCache.length===0 && (ev.participants||[]).length>0){ refreshEventParticipants(); }
+    const hpByName = {};
+    eventParticipantsCache.forEach(pl=>{ hpByName[pl.name] = pl.hp!=null ? pl.hp : playerMaxHp(); });
+    const participantRows = (ev.participants||[]).map(name=>{
+      const dd = state.eventDamageDraft[name] || {};
+      const hp = hpByName[name];
+      return `<div class="item-row" style="cursor:default;flex-wrap:wrap;">
+        <span style="min-width:110px;">${esc(name)} ${hp!=null?`<span class="small-note" style="color:${hp<=(playerMaxHp()*0.25)?'var(--accent-red)':'inherit'};">❤️${hp}/${playerMaxHp()}</span>`:''}</span>
+        <input type="number" placeholder="對Boss傷害" style="width:100px;" value="${dd.toBoss||''}" oninput="state.eventDamageDraft['${esc(name)}']=Object.assign({},state.eventDamageDraft['${esc(name)}'],{toBoss:this.value})">
+        <input type="number" placeholder="選手受傷" style="width:100px;" value="${dd.taken||''}" oninput="state.eventDamageDraft['${esc(name)}']=Object.assign({},state.eventDamageDraft['${esc(name)}'],{taken:this.value})">
+        <button class="btn secondary small" onclick="coachApplyEventDamage('${esc(name)}')">套用</button>
+        <button class="btn secondary small" style="color:var(--accent-red);" onclick="coachToggleEventParticipant('${esc(name)}')">移除</button>
+      </div>`;
+    }).join('') || '<div class="empty">尚未加入任何選手</div>';
+    const nonParticipants = state.players.filter(n=>!(ev.participants||[]).includes(n));
+    const addParticipantOptions = nonParticipants.map(n=>`<button class="btn secondary small" style="margin:3px;" onclick="coachToggleEventParticipant('${esc(n)}')">＋ ${esc(n)}</button>`).join('') || '<span class="small-note">所有球員都已加入</span>';
+    const eventLog = (ev.log||[]).slice(0,15).map(l=>`<div class="small-note">${esc(l.date)} · ${esc(l.name)} ${l.dmgToBoss?('對Boss -'+l.dmgToBoss):''} ${l.dmgTaken?('自己受傷 -'+l.dmgTaken):''}</div>`).join('');
+    body = `
+    <div class="panel" style="background:${ev.active?'rgba(42,157,143,0.12)':'var(--bg-panel-2)'};border-color:${ev.active?'var(--accent-green)':'var(--line)'};margin-bottom:14px;">
+      <h2 style="font-size:16px;">${ev.active?'🟢 活動進行中':'⚙️ 活動設定'}</h2>
+      <div class="row-flex">
+        <div><label>活動名稱</label><input type="text" value="${esc(state.eventSetupDraft.name||ev.name||'')}" oninput="state.eventSetupDraft.name=this.value" placeholder="例如：暑期團練 Boss 挑戰賽"></div>
+        <div><label>開始時間</label><input type="datetime-local" value="${esc(state.eventSetupDraft.startTime||(ev.startTime?ev.startTime.slice(0,16):''))}" oninput="state.eventSetupDraft.startTime=this.value"></div>
+      </div>
+      <div class="row-flex" style="margin-top:10px;">
+        <div style="max-width:90px;"><label>Boss圖示</label><input type="text" value="${esc(state.eventSetupDraft.bossEmoji||ev.bossEmoji||'🔥')}" oninput="state.eventSetupDraft.bossEmoji=this.value"></div>
+        <div><label>活動 Boss 名稱</label><input type="text" value="${esc(state.eventSetupDraft.bossName||ev.bossName||'')}" oninput="state.eventSetupDraft.bossName=this.value" placeholder="例如：夏日烈焰王"></div>
+        <div style="max-width:110px;"><label>Boss 血量</label><input type="number" value="${state.eventSetupDraft.bossHp||ev.bossMaxHp||100}" oninput="state.eventSetupDraft.bossHp=this.value"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn secondary" onclick="coachSaveEventSetup()">💾 儲存活動設定</button>
+        ${ev.active ? `<button class="btn secondary" style="color:var(--accent-red);" onclick="coachEndEvent()">🛑 結束活動</button>` : `<button class="btn gold" onclick="coachStartEvent()">▶️ 開始活動</button>`}
+      </div>
+      <div class="small-note" style="margin-top:10px;">目前設定：${esc(ev.name||'尚未設定')} ・ 開始時間 ${startLocal} ・ Boss：${esc(ev.bossEmoji||'')} ${esc(ev.bossName||'')}</div>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">${esc(ev.bossEmoji||'🔥')} Boss 血量：${ev.bossHp||0} / ${ev.bossMaxHp||0}</h2>
+      <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">👥 參加名單與傷害輸入</h2>
+      <div class="small-note" style="margin-bottom:8px;">「對Boss傷害」是這位選手這次表現造成的傷害（會扣Boss血量）；「選手受傷」是Boss對這位選手造成的傷害（會扣這位選手自己的血量）。每次輸入完按「套用」才會生效，可以重複套用多次（例如每一輪動作結束都套用一次）。</div>
+      ${participantRows}
+      <div style="margin-top:10px;">
+        <div class="small-note" style="margin-bottom:4px;">加入選手：</div>
+        ${addParticipantOptions}
+      </div>
+    </div>
+    ${eventLog ? `<div class="panel" style="background:var(--bg-panel-2);"><h2 style="font-size:16px;">📜 本次活動紀錄</h2>${eventLog}</div>` : ''}`;
   } else if(state.coachTab==='backup'){
     const lastBackup = state.config.lastBackupDate;
     const isToday = lastBackup === todayStr();
@@ -5422,6 +5635,7 @@ function renderCoachRole(){
       <div class="tab ${['geoquestions','questions'].includes(state.coachTab)?'active':''}" onclick="setCoachTab('geoquestions')">題庫（試煉之路＋棒球）</div>
       <div class="tab ${state.coachTab==='knowledgebase'?'active':''}" onclick="setCoachTab('knowledgebase')">防護知識庫</div>
       <div class="tab ${state.coachTab==='teamrules'?'active':''}" onclick="setCoachTab('teamrules')">隊規</div>
+      <div class="tab ${state.coachTab==='event'?'active':''}" onclick="setCoachTab('event')">🎪 團隊活動</div>
       <div class="tab ${state.coachTab==='spinwheel'?'active':''}" onclick="setCoachTab('spinwheel')">🎡 抽獎轉盤</div>
       <div class="tab ${state.coachTab==='backup'?'active':''}" onclick="setCoachTab('backup')">💾 備份</div>
       <div class="tab ${state.coachTab==='items'?'active':''}" onclick="setCoachTab('items')">項目管理</div>
@@ -5437,7 +5651,7 @@ function setRole(r){
   if(r==='coach'){ overviewCache=[]; stopNpcChat(); }
   render();
 }
-function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } if(t==='examscores'){ examScoresCache=[]; } if(t==='fitness'){ fitnessCache=[]; } if(t==='bonus'){ personalTasksCache=[]; } render(); }
+function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } if(t==='examscores'){ examScoresCache=[]; } if(t==='fitness'){ fitnessCache=[]; } if(t==='bonus'){ personalTasksCache=[]; } if(t==='event'){ eventParticipantsCache=[]; } render(); }
 
 function openCoachLogin(){
   state.showCoachLogin = true;
