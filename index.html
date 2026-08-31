@@ -1808,7 +1808,10 @@ let state = {
   secretarySyncStatus: null,
   examImportName: '',
   assignTaskDraft: {playerName:'', name:'', points:10, note:''},
-  goalReplyDraft: {}
+  goalReplyDraft: {},
+  showJournalDetail: null,
+  journalDetailData: null,
+  journalEntryReplyDraft: {}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -3773,7 +3776,9 @@ async function coachReplyGoal(playerName, which){
   await savePlayer(p);
   delete state.goalReplyDraft[draftKey];
   showToast('已回覆「'+playerName+'」的目標');
-  await refreshJournals();
+  dailyTasksCache = [];
+  if(state.showJournalDetail===playerName) await refreshJournalDetail(playerName);
+  else render();
 }
 async function coachDeleteGoal(playerName, which){
   const goalKey = 'current'+which.charAt(0).toUpperCase()+which.slice(1)+'Goal';
@@ -3785,7 +3790,9 @@ async function coachDeleteGoal(playerName, which){
     p[replyKey] = null;
     await savePlayer(p);
     showToast('已刪除目標');
-    await refreshJournals();
+    dailyTasksCache = [];
+    if(state.showJournalDetail===playerName) await refreshJournalDetail(playerName);
+    else render();
   });
 }
 async function coachDeleteJournalEntry(playerName, logIndex){
@@ -3795,8 +3802,111 @@ async function coachDeleteJournalEntry(playerName, logIndex){
     delete p.log[logIndex].journal;
     await savePlayer(p);
     showToast('已刪除這筆日誌');
-    await refreshJournals();
+    dailyTasksCache = [];
+    if(state.showJournalDetail===playerName) await refreshJournalDetail(playerName);
   });
+}
+function openJournalDetail(playerName){
+  state.showJournalDetail = playerName;
+  state.journalDetailData = null;
+  render();
+  refreshJournalDetail(playerName);
+}
+function closeJournalDetail(){
+  state.showJournalDetail = null;
+  state.journalDetailData = null;
+  render();
+}
+async function refreshJournalDetail(playerName){
+  const p = normalizePlayer(await getPlayer(playerName));
+  if(!p) return;
+  const entries = [];
+  (p.log||[]).forEach((l,idx)=>{
+    if(l.journal){ entries.push({logIndex: idx, date: l.date, journal: l.journal, coachReply: l.coachReply||null}); }
+  });
+  entries.sort((a,b)=> b.date.localeCompare(a.date));
+  state.journalDetailData = {
+    name: p.name, realName: p.realName||'', avatarId: p.avatarId,
+    currentShortGoal: p.currentShortGoal, currentMidGoal: p.currentMidGoal, currentLongGoal: p.currentLongGoal,
+    coachReplyShort: p.coachReplyShort, coachReplyMid: p.coachReplyMid, coachReplyLong: p.coachReplyLong,
+    entries
+  };
+  render();
+}
+async function coachReplyToJournalEntry(playerName, logIndex){
+  const draftKey = playerName+'_entry_'+logIndex;
+  const text = (state.journalEntryReplyDraft[draftKey]||'').trim();
+  if(!text){ showToast('請輸入回覆內容'); return; }
+  const p = await getPlayer(playerName);
+  if(!p || !p.log || !p.log[logIndex]) return;
+  p.log[logIndex].coachReply = text;
+  await savePlayer(p);
+  delete state.journalEntryReplyDraft[draftKey];
+  showToast('已回覆這則日誌');
+  dailyTasksCache = [];
+  await refreshJournalDetail(playerName);
+}
+function renderJournalDetailModal(){
+  const d = state.journalDetailData;
+  if(!d){
+    return `<div class="modal-bg" onclick="if(event.target===this){closeJournalDetail();}">
+      <div class="modal" style="max-width:480px;text-align:center;">
+        <div class="small-note">載入中…</div>
+      </div>
+    </div>`;
+  }
+  const ch = characterById(d.avatarId);
+  function goalBlockDetail(which, label, goalText, replyText){
+    const draftKey = d.name+'_'+which;
+    return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;">
+      <div class="small-note" style="color:var(--accent-light);font-weight:600;">${label}</div>
+      ${goalText ? `
+        <div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(goalText)}</div>
+        ${replyText ? `<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(replyText)}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <input type="text" style="flex:1;font-size:12px;" value="${esc(state.goalReplyDraft[draftKey]||'')}" oninput="state.goalReplyDraft['${draftKey}']=this.value" placeholder="${replyText?'更新回覆…':'寫回覆給他…'}">
+          <button class="btn secondary small" onclick="coachReplyGoal('${esc(d.name)}','${which}')">回覆</button>
+          <button class="btn secondary small" style="color:var(--accent-red);" onclick="coachDeleteGoal('${esc(d.name)}','${which}')">🗑️</button>
+        </div>` : '<div class="small-note" style="margin-top:4px;">尚未設定</div>'}
+    </div>`;
+  }
+  const entriesHtml = (d.entries||[]).map(e=>{
+    const rows = journalFieldLabels().filter(f=>!['shortGoal','midGoal','longGoal'].includes(f.key)).map(f=>{
+      const v = e.journal[f.key];
+      if(!v) return '';
+      return `<div style="margin-bottom:4px;"><span class="small-note" style="font-weight:600;">${esc(f.label)}：</span><span style="font-size:12px;">${esc(v)}</span></div>`;
+    }).join('');
+    const draftKey = d.name+'_entry_'+e.logIndex;
+    return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:8px;">
+      <div class="flex-between"><span class="small-note">${esc(e.date)}</span><button class="btn secondary small" style="padding:2px 8px;font-size:10px;" onclick="coachDeleteJournalEntry('${esc(d.name)}',${e.logIndex})">🗑️ 刪除</button></div>
+      ${rows || '<div class="small-note">（無其他內容）</div>'}
+      ${e.coachReply ? `<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(e.coachReply)}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <input type="text" style="flex:1;font-size:12px;" value="${esc(state.journalEntryReplyDraft[draftKey]||'')}" oninput="state.journalEntryReplyDraft['${draftKey}']=this.value" placeholder="${e.coachReply?'更新回覆…':'回覆這則日誌…'}">
+        <button class="btn secondary small" onclick="coachReplyToJournalEntry('${esc(d.name)}',${e.logIndex})">回覆</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="small-note" style="margin-top:8px;">尚無日誌紀錄</div>';
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){closeJournalDetail();}">
+    <div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;">
+      <div class="flex-between">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;">
+          <div>
+            <div style="font-weight:600;">${esc(d.name)}</div>
+            <div class="small-note">${esc(d.realName||'未填本名')}</div>
+          </div>
+        </div>
+        <button class="btn secondary small" onclick="closeJournalDetail()">✕ 關閉</button>
+      </div>
+      ${goalBlockDetail('short','📅 短期目標',d.currentShortGoal,d.coachReplyShort)}
+      ${goalBlockDetail('mid','📅 中期目標',d.currentMidGoal,d.coachReplyMid)}
+      ${goalBlockDetail('long','📅 長期目標',d.currentLongGoal,d.coachReplyLong)}
+      <h3 style="margin-top:16px;font-size:14px;">📔 訓練日誌紀錄（${(d.entries||[]).length}筆）</h3>
+      ${entriesHtml}
+    </div>
+  </div>`;
 }
 
 /* ============ 畫面渲染 ============ */
@@ -5171,6 +5281,18 @@ function renderPlayerRole(){
     </div>
   </div>` : ''}
 
+  ${(()=>{
+    const repliedEntries = (p.log||[]).filter(l=>l.journal && l.coachReply).slice(0,5);
+    if(!repliedEntries.length) return '';
+    return `<div class="panel" style="margin-top:10px;">
+      <h2 style="font-size:16px;"><span class="eyebrow">Feedback</span>💬 教練對日誌的回覆</h2>
+      ${repliedEntries.map(l=>`<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px 12px;margin-top:8px;">
+        <div class="small-note">${esc(l.date)}</div>
+        <div class="small-note" style="margin-top:4px;color:var(--accent-green);">✔ ${esc(l.coachReply)}</div>
+      </div>`).join('')}
+    </div>`;
+  })()}
+
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;align-items:start;">
     <div style="display:flex;flex-direction:column;gap:10px;">
       <div class="panel" style="margin-top:0;padding:14px;">
@@ -5626,70 +5748,20 @@ function renderCoachRole(){
         ${requiredItems.map(it=>`<td style="text-align:center;font-size:16px;">${pl.doneToday.has(it.name)?'✅':'⬜'}</td>`).join('')}
         <td style="text-align:center;">${allDone?'<span style="color:var(--accent-green);">🎉 全部完成</span>':`<span class="small-note">${doneCount}/${requiredItems.length}</span>`}</td>
         <td>${(pl.pending||[]).length ? `<button class="btn secondary small" style="color:var(--accent-light);" onclick="viewPlayerLog('${esc(pl.name)}')">📎 ${pl.pending.length}筆待審核</button>` : ''}</td>
+        <td><button class="btn secondary small" onclick="openJournalDetail('${esc(pl.name)}')">📔 訓練日誌</button></td>
       </tr>`;
     }).join('');
     body = `
     ${pendingSection}
     <div class="flex-between" style="margin-bottom:10px;">
-      <div class="small-note">今天（${todayStr()}）每位選手的每日必做項目完成狀況</div>
+      <div class="small-note">今天（${todayStr()}）每位選手的每日必做項目完成狀況；點「📔 訓練日誌」另開視窗看該選手的目標與日誌內容，可以直接回覆。</div>
       <button class="btn secondary small" onclick="dailyTasksCache=[];refreshDailyTasks();">🔄 重新整理</button>
     </div>
     ${requiredItems.length ? `
-    <table><thead><tr><th>角色</th><th>選手</th>${requiredItems.map(it=>`<th>${esc(it.name)}</th>`).join('')}<th>完成度</th><th>待審核</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan='+(requiredItems.length+4)+' class="empty">尚無球員資料</td></tr>'}</tbody></table>
-    ` : '<div class="empty">目前沒有設定「每日必做」的項目（在項目管理勾選⭐才會顯示在這裡）</div>'}`;
-  } else if(state.coachTab==='journals'){
-    if(journalsCache.length===0 && state.players.length>0){ refreshJournals(); }
-    function goalBlock(playerName, which, label, goalText, replyText){
-      const draftKey = playerName+'_'+which;
-      return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;">
-        <div class="small-note" style="color:var(--accent-light);font-weight:600;">${label}</div>
-        ${goalText ? `
-          <div style="font-size:13px;margin-top:4px;white-space:pre-line;">${esc(goalText)}</div>
-          ${replyText ? `<div class="small-note" style="margin-top:6px;color:var(--accent-green);">✔ 教練回覆：${esc(replyText)}</div>` : ''}
-          <div style="display:flex;gap:6px;margin-top:8px;">
-            <input type="text" style="flex:1;font-size:12px;" value="${esc(state.goalReplyDraft[draftKey]||'')}" oninput="state.goalReplyDraft['${draftKey}']=this.value" placeholder="${replyText?'更新回覆…':'寫回覆給他…'}">
-            <button class="btn secondary small" onclick="coachReplyGoal('${esc(playerName)}','${which}')">回覆</button>
-            <button class="btn secondary small" style="color:var(--accent-red);" onclick="coachDeleteGoal('${esc(playerName)}','${which}')">🗑️</button>
-          </div>` : '<div class="small-note" style="margin-top:4px;">尚未設定</div>'}
-      </div>`;
-    }
-    const cards = journalsCache.map(pl=>{
-      const ch = effectiveCharacter(pl);
-      const entries = (pl.entries||[]).slice(0,5).map(e=>{
-        const rows = journalFieldLabels().filter(f=>!['shortGoal','midGoal','longGoal'].includes(f.key)).map(f=>{
-          const v = e.journal[f.key];
-          if(!v) return '';
-          return `<div style="margin-bottom:4px;"><span class="small-note" style="font-weight:600;">${esc(f.label)}：</span><span style="font-size:12px;">${esc(v)}</span></div>`;
-        }).join('');
-        return `<div style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:6px;">
-          <div class="flex-between"><span class="small-note">${esc(e.date)}</span><button class="btn secondary small" style="padding:2px 8px;font-size:10px;" onclick="coachDeleteJournalEntry('${esc(pl.name)}',${e.logIndex})">🗑️ 刪除</button></div>
-          ${rows || '<div class="small-note">（無其他內容）</div>'}
-        </div>`;
-      }).join('');
-      return `<div class="panel" style="background:var(--bg-panel-2);margin-top:0;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;">
-          <div>
-            <div style="font-weight:600;">${esc(pl.name)}</div>
-            <div class="small-note">${esc(pl.realName||'未填本名')}</div>
-          </div>
-        </div>
-        ${goalBlock(pl.name,'short','📅 短期目標',pl.currentShortGoal,pl.coachReplyShort)}
-        ${goalBlock(pl.name,'mid','📅 中期目標',pl.currentMidGoal,pl.coachReplyMid)}
-        ${goalBlock(pl.name,'long','📅 長期目標',pl.currentLongGoal,pl.coachReplyLong)}
-        <h3 style="margin-top:14px;font-size:14px;">最近日誌（${(pl.entries||[]).length}筆）</h3>
-        ${entries || '<div class="small-note" style="margin-top:6px;">尚無日誌紀錄</div>'}
-      </div>`;
-    }).join('');
-    body = `
-    <div class="flex-between">
-      <div class="small-note">依球員分組，每張卡片可以單獨看短/中/長期目標，回覆或刪除都不影響其他人。</div>
-      <button class="btn secondary small" onclick="journalsCache=[];refreshJournals();">重新整理</button>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:12px;">
-      ${cards || '<div class="empty">目前還沒有任何學生資料</div>'}
-    </div>`;
+    <table><thead><tr><th>角色</th><th>選手</th>${requiredItems.map(it=>`<th>${esc(it.name)}</th>`).join('')}<th>完成度</th><th>待審核</th><th>訓練日誌</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan='+(requiredItems.length+5)+' class="empty">尚無球員資料</td></tr>'}</tbody></table>
+    ` : '<div class="empty">目前沒有設定「每日必做」的項目（在項目管理勾選⭐才會顯示在這裡）</div>'}
+    ${state.showJournalDetail ? renderJournalDetailModal() : ''}`;
   } else if(state.coachTab==='examscores'){
     const playerOptions = state.players.map(n=>`<option value="${esc(n)}" ${state.addExamDraft.playerName===n?'selected':''}>${esc(n)}</option>`).join('');
     const subjectInputs = EXAM_SUBJECTS.map(sub=>`
@@ -6148,8 +6220,7 @@ function renderCoachRole(){
   <div class="panel">
     <div class="tabs">
       <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
-      <div class="tab ${state.coachTab==='journals'?'active':''}" onclick="setCoachTab('journals')">訓練日誌總覽</div>
-      <div class="tab ${state.coachTab==='dailytasks'?'active':''}" onclick="setCoachTab('dailytasks')">📋 每日任務總覽</div>
+      <div class="tab ${state.coachTab==='dailytasks'?'active':''}" onclick="setCoachTab('dailytasks')">📋 每日任務＋訓練日誌</div>
       <div class="tab ${state.coachTab==='bonus'?'active':''}" onclick="setCoachTab('bonus')">額外任務</div>
       <div class="tab ${state.coachTab==='fitness'?'active':''}" onclick="setCoachTab('fitness')">體能檢測</div>
       <div class="tab ${state.coachTab==='examscores'?'active':''}" onclick="setCoachTab('examscores')">段考成績</div>
