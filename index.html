@@ -3585,6 +3585,8 @@ async function reviewLog(name, index, decision){
   state.viewingPlayer = p;
   render();
   refreshOverview();
+  dailyTasksCache = [];
+  refreshDailyTasks();
 }
 const NPC_CHAT_LINES = [
   '今天要認真練習！',
@@ -3717,6 +3719,25 @@ async function refreshPersonalTasks(){
     all.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level||1, personalTasks: p.personalTasks||[] });
   }
   personalTasksCache = all;
+  render();
+}
+let dailyTasksCache = [];
+async function refreshDailyTasks(){
+  const names = await listPlayers();
+  const data = [];
+  for(const n of names){
+    const p = normalizePlayer(await getPlayer(n));
+    if(!p) continue;
+    const doneToday = doneNamesToday(p);
+    const pendingEntries = [];
+    (p.log||[]).forEach((entry,idx)=>{
+      if(entry.reviewStatus==='pending'){
+        pendingEntries.push({ index: idx, date: entry.date, items: (entry.items||[]).map(logItemName), detail: entry.items });
+      }
+    });
+    data.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level, doneToday, pending: pendingEntries });
+  }
+  dailyTasksCache = data;
   render();
 }
 let journalsCache = [];
@@ -5577,6 +5598,46 @@ function renderCoachRole(){
       </div>
       <div style="margin-top:12px;"><button class="btn gold" onclick="addTeamRuleEntry()">新增條目</button></div>
     </div>`;
+  } else if(state.coachTab==='dailytasks'){
+    if(dailyTasksCache.length===0 && state.players.length>0){ refreshDailyTasks(); }
+    const requiredItems = state.config.items.filter(it=>it.required);
+    const allPending = [];
+    dailyTasksCache.forEach(pl=>{ (pl.pending||[]).forEach(entry=>allPending.push({player:pl, entry})); });
+    const pendingSection = allPending.length ? `
+    <div class="panel" style="background:rgba(255,209,102,0.12);border-color:var(--accent-light);margin-bottom:14px;">
+      <h2 style="font-size:16px;">📎 待審核（需要上傳證明的項目，${allPending.length}筆）</h2>
+      <div class="small-note" style="margin-bottom:8px;">這些是學生勾選了需要上傳影片/照片證明的項目，確認他們真的有附上證明後再通過；沒附證明或造假請按不通過，會扣點。</div>
+      ${allPending.map(({player,entry})=>`
+        <div class="item-row" style="cursor:default;flex-wrap:wrap;">
+          <span style="min-width:80px;">${esc(player.realName||player.name)}（${esc(player.name)}）</span>
+          <span class="small-note">${esc(entry.date)} ・ ${entry.items.map(esc).join('、')}</span>
+          <button class="btn gold small" onclick="reviewLog('${esc(player.name)}',${entry.index},'approve')">✅ 通過</button>
+          <button class="btn secondary small" style="color:var(--accent-red);" onclick="reviewLog('${esc(player.name)}',${entry.index},'reject')">❌ 不通過（扣點）</button>
+          <button class="btn secondary small" onclick="viewPlayerLog('${esc(player.name)}')">🔍 查看完整紀錄</button>
+        </div>`).join('')}
+    </div>` : '';
+    const rows = dailyTasksCache.map(pl=>{
+      const ch = characterById(pl.avatarId);
+      const doneCount = requiredItems.filter(it=>pl.doneToday.has(it.name)).length;
+      const allDone = requiredItems.length>0 && doneCount===requiredItems.length;
+      return `<tr>
+        <td><img src="${ch.image}" style="width:26px;height:26px;image-rendering:pixelated;border-radius:5px;" title="${esc(ch.name)}"></td>
+        <td>${esc(pl.realName||pl.name)}<div class="small-note">${esc(pl.name)}</div></td>
+        ${requiredItems.map(it=>`<td style="text-align:center;font-size:16px;">${pl.doneToday.has(it.name)?'✅':'⬜'}</td>`).join('')}
+        <td style="text-align:center;">${allDone?'<span style="color:var(--accent-green);">🎉 全部完成</span>':`<span class="small-note">${doneCount}/${requiredItems.length}</span>`}</td>
+        <td>${(pl.pending||[]).length ? `<button class="btn secondary small" style="color:var(--accent-light);" onclick="viewPlayerLog('${esc(pl.name)}')">📎 ${pl.pending.length}筆待審核</button>` : ''}</td>
+      </tr>`;
+    }).join('');
+    body = `
+    ${pendingSection}
+    <div class="flex-between" style="margin-bottom:10px;">
+      <div class="small-note">今天（${todayStr()}）每位選手的每日必做項目完成狀況</div>
+      <button class="btn secondary small" onclick="dailyTasksCache=[];refreshDailyTasks();">🔄 重新整理</button>
+    </div>
+    ${requiredItems.length ? `
+    <table><thead><tr><th>角色</th><th>選手</th>${requiredItems.map(it=>`<th>${esc(it.name)}</th>`).join('')}<th>完成度</th><th>待審核</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan='+(requiredItems.length+4)+' class="empty">尚無球員資料</td></tr>'}</tbody></table>
+    ` : '<div class="empty">目前沒有設定「每日必做」的項目（在項目管理勾選⭐才會顯示在這裡）</div>'}`;
   } else if(state.coachTab==='journals'){
     if(journalsCache.length===0 && state.players.length>0){ refreshJournals(); }
     function goalBlock(playerName, which, label, goalText, replyText){
@@ -6088,6 +6149,7 @@ function renderCoachRole(){
     <div class="tabs">
       <div class="tab ${state.coachTab==='overview'?'active':''}" onclick="setCoachTab('overview')">隊伍總覽</div>
       <div class="tab ${state.coachTab==='journals'?'active':''}" onclick="setCoachTab('journals')">訓練日誌總覽</div>
+      <div class="tab ${state.coachTab==='dailytasks'?'active':''}" onclick="setCoachTab('dailytasks')">📋 每日任務總覽</div>
       <div class="tab ${state.coachTab==='bonus'?'active':''}" onclick="setCoachTab('bonus')">額外任務</div>
       <div class="tab ${state.coachTab==='fitness'?'active':''}" onclick="setCoachTab('fitness')">體能檢測</div>
       <div class="tab ${state.coachTab==='examscores'?'active':''}" onclick="setCoachTab('examscores')">段考成績</div>
@@ -6111,7 +6173,7 @@ function setRole(r){
   if(r==='coach'){ overviewCache=[]; stopNpcChat(); }
   render();
 }
-function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } if(t==='examscores'){ examScoresCache=[]; } if(t==='fitness'){ fitnessCache=[]; } if(t==='bonus'){ personalTasksCache=[]; } if(t==='event'){ eventParticipantsCache=[]; } render(); }
+function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } if(t==='examscores'){ examScoresCache=[]; } if(t==='fitness'){ fitnessCache=[]; } if(t==='bonus'){ personalTasksCache=[]; } if(t==='event'){ eventParticipantsCache=[]; } if(t==='dailytasks'){ dailyTasksCache=[]; } render(); }
 
 function openCoachLogin(){
   state.showCoachLogin = true;
