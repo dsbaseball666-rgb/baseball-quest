@@ -449,6 +449,15 @@ function buildDefaultConfig(){
     bossAttackDamage:10,
     ultimateDamage:100,
     bossRoster: DEFAULT_BOSS_ROSTER.slice(),
+    spinPrizes: [
+      {id:'sp_1', name:'小獎勵貼紙', weight:30, pointsValue:0, color:'#4CAF50'},
+      {id:'sp_2', name:'10 點數', weight:25, pointsValue:10, color:'#2F6FB5'},
+      {id:'sp_3', name:'30 點數', weight:15, pointsValue:30, color:'#FFAA00'},
+      {id:'sp_4', name:'再抽一次', weight:10, pointsValue:0, color:'#D93A3A'},
+      {id:'sp_5', name:'50 點數', weight:8, pointsValue:50, color:'#6A3FA0'},
+      {id:'sp_6', name:'神秘小禮物', weight:5, pointsValue:0, color:'#3A8A8A'},
+      {id:'sp_7', name:'100 點數', weight:2, pointsValue:100, color:'#E39C2A'}
+    ],
     skillRoster: [
       // 劍士 c_swordsman：近戰爆發流
       {id:'sk_sw_basic', classId:'c_swordsman', name:'扎實基本功', desc:'揮棒紮實，攻擊傷害隨等級提升', type:'passive', stages:[
@@ -1014,6 +1023,7 @@ async function getConfig(){
     if(parsed.lastBackupDate===undefined) parsed.lastBackupDate = null;
     if(parsed.playerMaxHp==null) parsed.playerMaxHp = 100;
     if(parsed.bossAttackDamage==null) parsed.bossAttackDamage = 10;
+    if(!parsed.spinPrizes) parsed.spinPrizes = buildDefaultConfig().spinPrizes;
     (parsed.items||[]).forEach(it=>{
       if(it.subOptions==null) it.subOptions = [];
       it.subOptions = it.subOptions.map(o=> typeof o==='string' ? {label:o, xp:5, points:0} : o);
@@ -1161,7 +1171,7 @@ function defaultPlayer(name, realName, avatarId, pin, grade){
     trialDate:null, trialCount:0, trialCorrect:0, pin: pin || null,
     currentShortGoal:null, currentMidGoal:null, currentLongGoal:null,
     coachReplyShort:null, coachReplyMid:null, coachReplyLong:null, lastRescueDate:null,
-    grade: grade || '', examScores: [], fitnessTests: [], personalTasks: [], hp: 100
+    grade: grade || '', examScores: [], fitnessTests: [], personalTasks: [], hp: 100, spinTickets: 0, spinLog: []
   };
 }
 function normalizePlayer(p){
@@ -1196,6 +1206,8 @@ function normalizePlayer(p){
   if(p.hp==null) p.hp = playerMaxHp();
   p.hp = Math.max(0, Math.min(playerMaxHp(), p.hp));
   if(p.lastRescueDate===undefined) p.lastRescueDate = null;
+  if(p.spinTickets==null) p.spinTickets = 0;
+  if(!p.spinLog) p.spinLog = [];
   return p;
 }
 function characterById(id){
@@ -1739,6 +1751,12 @@ let state = {
   levelAdjustDraft: {},
   playerEditDraft: {},
   hpAdjustDraft: {},
+  showSpinWheel: false,
+  spinning: false,
+  spinRotation: 0,
+  spinResult: null,
+  addSpinPrizeDraft: {name:'', weight:10, pointsValue:0},
+  spinTicketDraft: {},
   videoUploadedDraft: false,
   viewingPlayer: null,
   formUrlDraft: '',
@@ -2605,6 +2623,121 @@ async function updateHpSettings(field, raw){
   else if(field==='damage') state.config.bossAttackDamage = Math.round(val);
   await saveConfig(state.config);
   showToast('已更新設定');
+  render();
+}
+/* ---- 抽獎轉盤 ---- */
+function weightedRandomPrizeIndex(prizes){
+  const total = prizes.reduce((s,p)=>s+(p.weight||0),0);
+  if(total<=0) return 0;
+  let r = Math.random()*total;
+  for(let i=0;i<prizes.length;i++){
+    r -= (prizes[i].weight||0);
+    if(r<=0) return i;
+  }
+  return prizes.length-1;
+}
+function computeSpinTargetRotation(prizes, winningIndex){
+  const total = prizes.reduce((s,p)=>s+(p.weight||0),0) || 1;
+  let cum = 0;
+  for(let i=0;i<winningIndex;i++){ cum += (prizes[i].weight||0); }
+  const segStart = cum/total*360;
+  const segSize = (prizes[winningIndex].weight||0)/total*360;
+  // 在該獎項的區間內隨機取一個點（避免每次都精準停在正中心，視覺上更自然）
+  const segCenter = segStart + segSize*(0.15+Math.random()*0.7);
+  const spins = 6;
+  return spins*360 + (360 - segCenter);
+}
+function openSpinWheel(){
+  const p = state.playerData;
+  if((p.spinTickets||0)<=0){ showToast('你目前沒有抽獎券，完成活動或任務就有機會獲得！'); return; }
+  state.showSpinWheel = true;
+  state.spinResult = null;
+  state.spinRotation = 0;
+  render();
+}
+async function doSpin(){
+  const p = state.playerData;
+  if((p.spinTickets||0)<=0){ showToast('抽獎券不夠了'); return; }
+  if(state.spinning) return;
+  const prizes = state.config.spinPrizes || [];
+  if(!prizes.length){ showToast('教練還沒有設定獎品'); return; }
+  p.spinTickets -= 1;
+  const winIdx = weightedRandomPrizeIndex(prizes);
+  const addedRotation = computeSpinTargetRotation(prizes, winIdx);
+  const startRotation = state.spinRotation || 0;
+  const targetRotation = startRotation + addedRotation;
+  state.spinning = true;
+  state.spinResult = null;
+  render();
+  // render() 會整個重建 DOM，CSS transition 沒辦法從舊畫面自然動畫過去，
+  // 所以先讓輪盤停在目前角度畫面穩定後，直接操作同一個 DOM 節點觸發轉場動畫
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      const el = document.getElementById('spin-wheel-disc');
+      if(el){
+        el.style.transition = 'transform 4s cubic-bezier(0.12,0.75,0.15,1)';
+        el.style.transform = 'rotate('+targetRotation+'deg)';
+      }
+    });
+  });
+  setTimeout(async ()=>{
+    const prize = prizes[winIdx];
+    let extraTicket = false;
+    if(prize.pointsValue) p.points += prize.pointsValue;
+    if(/再抽一次/.test(prize.name)){ p.spinTickets += 1; extraTicket = true; }
+    if(!p.spinLog) p.spinLog = [];
+    p.spinLog.unshift({date:todayStr(), name:prize.name, pointsValue:prize.pointsValue||0});
+    p.spinLog = p.spinLog.slice(0,20);
+    await savePlayer(p);
+    state.spinning = false;
+    state.spinResult = prize;
+    state.spinRotation = targetRotation % 360;
+    render();
+    showToast('🎉 抽中「'+prize.name+'」！'+(prize.pointsValue?('+'+prize.pointsValue+' 點數'):'')+(extraTicket?'（獲得額外一次抽獎機會！）':''));
+  }, 4200);
+}
+async function coachAddSpinPrize(){
+  const d = state.addSpinPrizeDraft;
+  if(!d.name.trim()){ showToast('請輸入獎品名稱'); return; }
+  const weight = Number(d.weight)||1;
+  const colors = ['#4CAF50','#2F6FB5','#FFAA00','#D93A3A','#6A3FA0','#3A8A8A','#E39C2A','#8A3A2A'];
+  const id = 'sp_'+Date.now();
+  if(!state.config.spinPrizes) state.config.spinPrizes = [];
+  state.config.spinPrizes.push({id, name:d.name.trim(), weight, pointsValue:Number(d.pointsValue)||0, color:colors[state.config.spinPrizes.length % colors.length]});
+  await saveConfig(state.config);
+  state.addSpinPrizeDraft = {name:'', weight:10, pointsValue:0};
+  showToast('已新增獎品');
+  render();
+}
+async function coachDeleteSpinPrize(id){
+  askConfirm('確定要刪除這個獎品嗎？', async ()=>{
+    state.config.spinPrizes = (state.config.spinPrizes||[]).filter(p=>p.id!==id);
+    await saveConfig(state.config);
+    showToast('已刪除');
+    render();
+  });
+}
+async function coachGrantSpinTickets(name, isAll){
+  const raw = state.spinTicketDraft[isAll?'__all__':name];
+  const count = Number(raw);
+  if(!raw || isNaN(count) || count<=0){ showToast('請輸入要發放的抽獎券數量'); return; }
+  if(isAll){
+    const names = await listPlayers();
+    for(const n of names){
+      const pl = await getPlayer(n);
+      if(!pl) continue;
+      pl.spinTickets = (pl.spinTickets||0) + Math.round(count);
+      await savePlayer(pl);
+    }
+    showToast('已發放抽獎券給全體共 '+names.length+' 位球員');
+  } else {
+    const pl = await getPlayer(name);
+    if(!pl) return;
+    pl.spinTickets = (pl.spinTickets||0) + Math.round(count);
+    await savePlayer(pl);
+    showToast('已發放 '+Math.round(count)+' 張抽獎券給 '+name);
+  }
+  state.spinTicketDraft[isAll?'__all__':name] = '';
   render();
 }
 async function rescueTeammate(targetName){
@@ -3711,6 +3844,34 @@ function renderLeaderboardModal(){
     </div>
   </div>`;
 }
+function renderSpinWheelModal(){
+  const p = state.playerData;
+  const prizes = state.config.spinPrizes || [];
+  const total = prizes.reduce((s,pr)=>s+(pr.weight||0),0) || 1;
+  let cum = 0;
+  const gradientStops = prizes.map(pr=>{
+    const startPct = cum/total*100;
+    cum += (pr.weight||0);
+    const endPct = cum/total*100;
+    return `${pr.color||'#4CAF50'} ${startPct}% ${endPct}%`;
+  }).join(', ') || '#4CAF50 0% 100%';
+  const legend = prizes.map(pr=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;margin:2px 6px 2px 0;"><span style="width:10px;height:10px;background:${pr.color||'#4CAF50'};display:inline-block;border-radius:2px;flex-shrink:0;"></span>${esc(pr.name)}</span>`).join('');
+  return `
+  <div class="modal-bg" onclick="if(event.target===this && !state.spinning){state.showSpinWheel=false;render();}">
+    <div class="modal" style="max-width:380px;text-align:center;">
+      <div class="flex-between"><h3 style="margin:0;">🎡 抽獎轉盤</h3>${state.spinning?'':'<button class="btn secondary small" onclick="state.showSpinWheel=false;render();">✕ 關閉</button>'}</div>
+      <div class="small-note" style="margin:8px 0;">剩餘抽獎券：🎟️ ${p.spinTickets||0} 張</div>
+      <div style="position:relative;width:240px;height:240px;margin:14px auto;">
+        <div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:26px;z-index:2;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.6));">🔻</div>
+        <div id="spin-wheel-disc" style="width:240px;height:240px;border-radius:50%;background:conic-gradient(${gradientStops});box-shadow:0 0 0 6px #000, 0 0 0 10px var(--accent-light);transform:rotate(${state.spinRotation||0}deg);"></div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px #000;"></div>
+      </div>
+      <div style="margin-bottom:10px;">${legend}</div>
+      ${state.spinResult ? `<div class="panel" style="background:rgba(255,209,102,0.15);border-color:var(--accent-light);margin-bottom:10px;padding:12px;"><div style="font-size:16px;font-weight:700;">🎉 抽中：${esc(state.spinResult.name)}</div>${state.spinResult.pointsValue?`<div class="small-note">+${state.spinResult.pointsValue} 點數</div>`:''}</div>` : ''}
+      <button class="btn gold" style="width:100%;padding:12px;" ${(state.spinning||(p.spinTickets||0)<=0)?'disabled':''} onclick="doSpin()">${state.spinning?'轉動中...':'🎯 開始抽獎（消耗 1 張抽獎券）'}</button>
+    </div>
+  </div>`;
+}
 function renderBonusTasksModal(){
   const p = state.playerData;
   const bonusTasks = state.config.bonusTasks || [];
@@ -4302,6 +4463,7 @@ function renderPlayerRole(){
       <div style="font-family:var(--font-display);font-size:15px;color:var(--accent-light);letter-spacing:0.5px;">🧭 現在該做什麼？</div>
       <div style="display:flex;gap:8px;align-items:center;">
         ${((state.config.bonusTasks||[]).length || (p.personalTasks||[]).length) ? `<button class="btn secondary small" style="border-radius:50%;width:30px;height:30px;padding:0;font-size:14px;color:var(--accent-red);border-color:var(--accent-red);" onclick="state.showBonusTasksModal=true;render();" title="額外任務">❗</button>` : ''}
+        ${(p.spinTickets||0)>0 ? `<button class="btn secondary small" style="border-radius:50%;width:30px;height:30px;padding:0;font-size:14px;color:var(--accent-light);border-color:var(--accent-light);" onclick="openSpinWheel()" title="抽獎轉盤">🎡</button>` : ''}
         <button class="btn secondary small" onclick="openPinSettings()">🔒 密碼</button>
         <button class="btn secondary small" onclick="backToPicker()">切換球員</button>
       </div>
@@ -4312,6 +4474,7 @@ function renderPlayerRole(){
     </div>
   </div>
   ${state.showBonusTasksModal ? renderBonusTasksModal() : ''}
+  ${state.showSpinWheel ? renderSpinWheelModal() : ''}
   ${(()=>{
     const due = goalFieldsDue(p);
     const pending = [];
@@ -5062,6 +5225,45 @@ function renderCoachRole(){
         <div style="flex:0;"><button class="btn gold" onclick="addQuestion()">新增題目</button></div>
       </div>
     </div>`;
+  } else if(state.coachTab==='spinwheel'){
+    const prizes = state.config.spinPrizes || [];
+    const total = prizes.reduce((s,pr)=>s+(pr.weight||0),0) || 1;
+    let rows = prizes.map(pr=>`
+      <tr>
+        <td><span style="display:inline-block;width:12px;height:12px;background:${pr.color||'#4CAF50'};border-radius:3px;margin-right:6px;"></span>${esc(pr.name)}</td>
+        <td>${pr.weight}</td>
+        <td>${Math.round((pr.weight||0)/total*1000)/10}%</td>
+        <td>${pr.pointsValue||0}</td>
+        <td><button class="btn secondary small" onclick="coachDeleteSpinPrize('${pr.id}')">刪除</button></td>
+      </tr>`).join('');
+    const playerOptionsForTicket = state.players.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    body = `
+    <div class="small-note" style="margin-bottom:10px;">「倍率」欄位就是中獎機率的權重——數字越大越容易被抽到，系統會自動幫你算出百分比。學生要先擁有「抽獎券」才能轉，下面可以發放抽獎券給個別學生或全體。</div>
+    <table><thead><tr><th>獎品</th><th>倍率</th><th>機率</th><th>點數</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=5 class="empty">尚無獎品</td></tr>'}</tbody></table>
+    <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
+      <h2 style="font-size:16px;">新增獎品</h2>
+      <div class="row-flex">
+        <div><label>獎品名稱</label><input type="text" value="${esc(state.addSpinPrizeDraft.name)}" oninput="state.addSpinPrizeDraft.name=this.value" placeholder="例如：文具組"></div>
+        <div style="max-width:110px;"><label>倍率（權重）</label><input type="number" value="${state.addSpinPrizeDraft.weight}" oninput="state.addSpinPrizeDraft.weight=this.value"></div>
+        <div style="max-width:110px;"><label>附贈點數（選填）</label><input type="number" value="${state.addSpinPrizeDraft.pointsValue}" oninput="state.addSpinPrizeDraft.pointsValue=this.value"></div>
+      </div>
+      <div class="small-note" style="margin-top:6px;">如果獎品名稱包含「再抽一次」四個字，抽到時會自動退還一張抽獎券，不需要另外設定。</div>
+      <div style="margin-top:12px;"><button class="btn gold" onclick="coachAddSpinPrize()">新增獎品</button></div>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
+      <h2 style="font-size:16px;">🎟️ 發放抽獎券</h2>
+      <div class="row-flex">
+        <div><label>選擇球員</label><select onchange="state.spinTicketDraft.__target=this.value">
+          <option value="">請選擇</option>${playerOptionsForTicket}
+        </select></div>
+        <div style="max-width:100px;"><label>張數</label><input type="number" placeholder="1" value="${state.spinTicketDraft[state.spinTicketDraft.__target||'']||''}" oninput="state.spinTicketDraft[state.spinTicketDraft.__target||'___none___']=this.value"></div>
+        <div style="flex:0;"><button class="btn secondary" onclick="coachGrantSpinTickets(state.spinTicketDraft.__target, false)">發放給這位球員</button></div>
+      </div>
+      <div class="row-flex" style="margin-top:10px;">
+        <div style="max-width:100px;"><label>發給全體張數</label><input type="number" placeholder="1" value="${state.spinTicketDraft.__all__||''}" oninput="state.spinTicketDraft.__all__=this.value"></div>
+        <div style="flex:0;"><button class="btn gold" onclick="coachGrantSpinTickets(null, true)">🎟️ 發放給全體球員</button></div>
+      </div>
+    </div>`;
   } else if(state.coachTab==='backup'){
     const lastBackup = state.config.lastBackupDate;
     const isToday = lastBackup === todayStr();
@@ -5211,6 +5413,7 @@ function renderCoachRole(){
       <div class="tab ${['geoquestions','questions'].includes(state.coachTab)?'active':''}" onclick="setCoachTab('geoquestions')">題庫（試煉之路＋棒球）</div>
       <div class="tab ${state.coachTab==='knowledgebase'?'active':''}" onclick="setCoachTab('knowledgebase')">防護知識庫</div>
       <div class="tab ${state.coachTab==='teamrules'?'active':''}" onclick="setCoachTab('teamrules')">隊規</div>
+      <div class="tab ${state.coachTab==='spinwheel'?'active':''}" onclick="setCoachTab('spinwheel')">🎡 抽獎轉盤</div>
       <div class="tab ${state.coachTab==='backup'?'active':''}" onclick="setCoachTab('backup')">💾 備份</div>
       <div class="tab ${state.coachTab==='items'?'active':''}" onclick="setCoachTab('items')">項目管理</div>
       <div class="tab ${state.coachTab==='shop'?'active':''}" onclick="setCoachTab('shop')">商店管理</div>
