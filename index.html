@@ -461,7 +461,9 @@ function buildDefaultConfig(){
     event: {
       active:false, name:'', startTime:null,
       bossName:'', bossEmoji:'🔥', bossHp:0, bossMaxHp:0,
-      participants:[], log:[]
+      participants:[], log:[],
+      pushupDamagePerRep:3, plankDamagePerSec:1,
+      pendingSubmissions:[]
     },
     skillRoster: [
       // 劍士 c_swordsman：近戰爆發流
@@ -1033,6 +1035,9 @@ async function getConfig(){
     if(!parsed.event.participants) parsed.event.participants = [];
     if(!parsed.event.log) parsed.event.log = [];
     if(parsed.event.bossImage===undefined) parsed.event.bossImage = null;
+    if(parsed.event.pushupDamagePerRep==null) parsed.event.pushupDamagePerRep = 3;
+    if(parsed.event.plankDamagePerSec==null) parsed.event.plankDamagePerSec = 1;
+    if(!parsed.event.pendingSubmissions) parsed.event.pendingSubmissions = [];
     (parsed.items||[]).forEach(it=>{
       if(it.subOptions==null) it.subOptions = [];
       it.subOptions = it.subOptions.map(o=> typeof o==='string' ? {label:o, xp:5, points:0} : o);
@@ -1770,6 +1775,8 @@ let state = {
   eventSetupDraft: {name:'', startTime:'', bossName:'', bossEmoji:'🔥', bossHp:100},
   eventDamageDraft: {},
   showEventLobby: false,
+  showMotionCapture: null,
+  submissionEditDraft: {},
   videoUploadedDraft: false,
   viewingPlayer: null,
   formUrlDraft: '',
@@ -1982,6 +1989,11 @@ function openTutorial(){
 }
 
 function backToPicker(){
+  if(state.motionCameraStream){
+    try{ state.motionCameraStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    state.motionCameraStream = null;
+  }
+  state.showMotionCapture = null;
   state.currentPlayer = null;
   state.playerData = null;
   render();
@@ -2761,6 +2773,13 @@ async function coachGrantSpinTickets(name, isAll){
   render();
 }
 /* ---- 團隊活動大廳 ---- */
+async function coachRefreshEventData(){
+  state.config = await getConfig();
+  eventParticipantsCache = [];
+  await refreshEventParticipants();
+  showToast('已重新整理活動資料');
+  render();
+}
 async function coachSaveEventSetup(){
   const d = state.eventSetupDraft;
   if(!d.name.trim()){ showToast('請輸入活動名稱'); return; }
@@ -2836,6 +2855,112 @@ async function coachEndEvent(){
     showToast('活動已結束');
     render();
   });
+}
+/* ---- 動作偵測（相機框架＋模擬數據，之後可換成真AI）---- */
+async function openMotionCapture(type){
+  state.showMotionCapture = { type, value:0, running:false, startedAt:null, cameraOk:false, cameraError:null };
+  render();
+  try{
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      throw new Error('這個瀏覽器不支援相機功能');
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}, audio:false});
+    state.motionCameraStream = stream;
+    if(state.showMotionCapture) state.showMotionCapture.cameraOk = true;
+    render();
+    requestAnimationFrame(()=>{
+      const v = document.getElementById('motion-camera-video');
+      if(v){ v.srcObject = stream; v.play().catch(()=>{}); }
+    });
+  }catch(e){
+    if(state.showMotionCapture) state.showMotionCapture.cameraError = '無法開啟相機（'+(e&&e.message?e.message:'未知錯誤')+'），可以直接用下面手動輸入完成回報。';
+    render();
+  }
+}
+function closeMotionCapture(){
+  if(state.motionCameraStream){
+    try{ state.motionCameraStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    state.motionCameraStream = null;
+  }
+  const mc = state.showMotionCapture;
+  if(mc && mc._timerHandle) clearInterval(mc._timerHandle);
+  state.showMotionCapture = null;
+  render();
+}
+function motionTapRep(){
+  const mc = state.showMotionCapture;
+  if(!mc) return;
+  mc.value += 1;
+  const el = document.getElementById('motion-counter-value');
+  if(el) el.textContent = mc.value;
+}
+function motionTogglePlankTimer(){
+  const mc = state.showMotionCapture;
+  if(!mc) return;
+  if(!mc.running){
+    mc.running = true;
+    mc.startedAt = Date.now() - (mc.value*1000);
+    mc._timerHandle = setInterval(()=>{
+      mc.value = Math.floor((Date.now()-mc.startedAt)/1000);
+      const el = document.getElementById('motion-counter-value');
+      if(el) el.textContent = mc.value;
+    }, 200);
+  } else {
+    mc.running = false;
+    if(mc._timerHandle) clearInterval(mc._timerHandle);
+  }
+  render();
+}
+function motionSetManualValue(raw){
+  const mc = state.showMotionCapture;
+  if(!mc) return;
+  mc.value = Math.max(0, Math.round(Number(raw)||0));
+}
+async function submitMotionResult(){
+  const mc = state.showMotionCapture;
+  if(!mc) return;
+  if(mc.value<=0){ showToast('目前還沒有任何次數／秒數，請先偵測或手動輸入'); return; }
+  const ev = state.config.event;
+  if(!ev.pendingSubmissions) ev.pendingSubmissions = [];
+  ev.pendingSubmissions.push({
+    id:'ms_'+Date.now(), name: state.currentPlayer, type: mc.type, value: mc.value, timestamp: Date.now()
+  });
+  await saveConfig(state.config);
+  showToast('✔ 已送出給教練確認！本次完成 '+mc.value+(mc.type==='plank'?' 秒棒式':' 下伏地挺身')+'，等教練確認後才會正式生效');
+  closeMotionCapture();
+}
+async function coachConfirmSubmission(id){
+  const ev = state.config.event;
+  const sub = (ev.pendingSubmissions||[]).find(s=>s.id===id);
+  if(!sub) return;
+  const draft = state.submissionEditDraft[id];
+  const value = (draft!=null && draft!=='') ? Number(draft) : sub.value;
+  const rate = sub.type==='pushup' ? (ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3) : (ev.plankDamagePerSec!=null?ev.plankDamagePerSec:1);
+  const dmg = Math.round(value*rate);
+  ev.bossHp = Math.max(0, ev.bossHp - dmg);
+  ev.log = ev.log || [];
+  ev.log.unshift({date:todayStr(), name:sub.name, dmgToBoss:dmg, dmgTaken:0, source:(sub.type==='pushup'?'伏地挺身 x':'棒式 x')+value+'（動作偵測）'});
+  ev.log = ev.log.slice(0,50);
+  ev.pendingSubmissions = ev.pendingSubmissions.filter(s=>s.id!==id);
+  delete state.submissionEditDraft[id];
+  await saveConfig(state.config);
+  showToast('已確認套用「'+sub.name+'」的動作偵測結果，Boss -'+dmg);
+  render();
+}
+async function coachRejectSubmission(id){
+  const ev = state.config.event;
+  ev.pendingSubmissions = (ev.pendingSubmissions||[]).filter(s=>s.id!==id);
+  await saveConfig(state.config);
+  showToast('已忽略這筆偵測結果');
+  render();
+}
+async function coachUpdateEventRate(field, raw){
+  const val = Number(raw);
+  if(isNaN(val)||val<0){ showToast('請輸入正確數字'); return; }
+  state.config.event[field] = val;
+  await saveConfig(state.config);
+  showToast('已更新換算倍率');
+  render();
 }
 async function coachApplyEventDamage(name){
   const d = state.eventDamageDraft[name] || {};
@@ -3528,6 +3653,16 @@ function render(){
   }
 
   app.innerHTML = html;
+
+  // 若動作偵測相機正在使用中，無論這次render()是為了什麼原因觸發，都確保video元素重新接上原本的串流
+  // （render()每次都會重建DOM，直接接的video標籤會失去srcObject，這裡自動補回去避免相機畫面消失）
+  if(state.motionCameraStream){
+    const v = document.getElementById('motion-camera-video');
+    if(v && v.srcObject !== state.motionCameraStream){
+      v.srcObject = state.motionCameraStream;
+      v.play().catch(()=>{});
+    }
+  }
 }
 
 function renderConfirmModal(){
@@ -3975,6 +4110,41 @@ function renderLeaderboardModal(){
     </div>
   </div>`;
 }
+function renderMotionCaptureModal(){
+  const mc = state.showMotionCapture;
+  if(!mc) return '';
+  const isPushup = mc.type==='pushup';
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){closeMotionCapture();}">
+    <div class="modal" style="max-width:420px;text-align:center;">
+      <div class="flex-between"><h3 style="margin:0;">📷 ${isPushup?'伏地挺身':'棒式'}偵測</h3><button class="btn secondary small" onclick="closeMotionCapture()">✕ 關閉</button></div>
+      <div class="small-note" style="margin:6px 0 10px;color:var(--accent-light);">⚠️ 框架測試模式：還沒接上真的 AI 動作辨識，請先用下面按鈕模擬動作次數／時間，之後會換成自動偵測，操作流程不會變。</div>
+      ${mc.cameraOk ? `
+        <div style="border-radius:10px;overflow:hidden;background:#000;box-shadow:0 0 0 2px #000;">
+          <video id="motion-camera-video" autoplay playsinline muted style="width:100%;max-height:260px;object-fit:cover;transform:scaleX(-1);"></video>
+        </div>
+      ` : mc.cameraError ? `
+        <div class="panel" style="background:rgba(228,87,46,0.14);border-color:var(--accent-red);text-align:left;">
+          <div style="font-size:13px;">⚠️ ${esc(mc.cameraError)}</div>
+        </div>
+      ` : `<div class="small-note">📷 正在請求相機權限…</div>`}
+      <div style="margin:16px 0;">
+        <div class="small-note">${isPushup?'目前次數':'目前秒數'}</div>
+        <div id="motion-counter-value" style="font-family:var(--font-display);font-size:44px;color:var(--accent-light);">${mc.value}</div>
+      </div>
+      ${isPushup ? `
+        <button class="btn gold" style="width:100%;padding:14px;font-size:16px;" onclick="motionTapRep()">👊 完成一下（模擬用，點一下+1）</button>
+      ` : `
+        <button class="btn ${mc.running?'secondary':'gold'}" style="width:100%;padding:14px;font-size:16px;" onclick="motionTogglePlankTimer()">${mc.running?'⏸ 停止計時':'▶️ 開始撐棒式計時'}</button>
+      `}
+      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);">
+        <div class="small-note" style="margin-bottom:6px;">或直接手動輸入結果（${isPushup?'次數':'秒數'}）：</div>
+        <input type="number" placeholder="${isPushup?'例如：15':'例如：45'}" oninput="motionSetManualValue(this.value)">
+      </div>
+      <button class="btn gold" style="width:100%;margin-top:14px;padding:12px;font-size:15px;" onclick="submitMotionResult()">✅ 完成！送出給教練確認</button>
+    </div>
+  </div>`;
+}
 function renderEventLobbyModal(){
   const ev = state.config.event || {};
   const p = state.playerData;
@@ -4004,6 +4174,14 @@ function renderEventLobbyModal(){
       </div>
       <h3 style="font-size:14px;margin-top:14px;">👥 參加隊員血量</h3>
       ${rows}
+      ${(ev.participants||[]).includes(p.name) ? `
+      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);">
+        <div class="small-note" style="margin-bottom:8px;text-align:center;">輪到你上場了嗎？完成動作、對 Boss 造成傷害！</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn gold" style="flex:1;" onclick="openMotionCapture('pushup')">👊 伏地挺身</button>
+          <button class="btn gold" style="flex:1;" onclick="openMotionCapture('plank')">🧘 棒式</button>
+        </div>
+      </div>` : ''}
       <div class="small-note" style="margin-top:10px;text-align:center;">💪 認真做好每一次動作，幫全隊一起打倒 Boss！</div>
     </div>
   </div>`;
@@ -4673,6 +4851,7 @@ function renderPlayerRole(){
     return '';
   })()}
   ${state.showEventLobby ? renderEventLobbyModal() : ''}
+  ${state.showMotionCapture ? renderMotionCaptureModal() : ''}
   ${(()=>{
     const due = goalFieldsDue(p);
     const pending = [];
@@ -5486,7 +5665,7 @@ function renderCoachRole(){
     const draftBossImage = state.eventSetupDraft.bossImage!==undefined ? state.eventSetupDraft.bossImage : ev.bossImage;
     body = `
     <div class="panel" style="background:${ev.active?'rgba(42,157,143,0.12)':'var(--bg-panel-2)'};border-color:${ev.active?'var(--accent-green)':'var(--line)'};margin-bottom:14px;">
-      <h2 style="font-size:16px;">${ev.active?'🟢 活動進行中':'⚙️ 活動設定'}</h2>
+      <div class="flex-between"><h2 style="font-size:16px;margin:0;">${ev.active?'🟢 活動進行中':'⚙️ 活動設定'}</h2><button class="btn secondary small" onclick="coachRefreshEventData()">🔄 重新整理（拉取學生剛送出的結果）</button></div>
       <div class="row-flex">
         <div><label>活動名稱</label><input type="text" value="${esc(state.eventSetupDraft.name||ev.name||'')}" oninput="state.eventSetupDraft.name=this.value" placeholder="例如：暑期團練 Boss 挑戰賽"></div>
         <div><label>開始時間</label><input type="datetime-local" value="${esc(state.eventSetupDraft.startTime||(ev.startTime?ev.startTime.slice(0,16):''))}" oninput="state.eventSetupDraft.startTime=this.value"></div>
@@ -5511,13 +5690,40 @@ function renderCoachRole(){
       <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">📷 動作偵測換算倍率</h2>
+      <div class="small-note" style="margin-bottom:8px;">學生用相機偵測完動作後會送到下面「待確認清單」，套用時就是用這個倍率算出對 Boss 的傷害。</div>
+      <div class="row-flex">
+        <div><label>每 1 下伏地挺身＝多少傷害</label><input type="number" value="${ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3}" onchange="coachUpdateEventRate('pushupDamagePerRep', this.value)"></div>
+        <div><label>每 1 秒棒式＝多少傷害</label><input type="number" value="${ev.plankDamagePerSec!=null?ev.plankDamagePerSec:1}" onchange="coachUpdateEventRate('plankDamagePerSec', this.value)"></div>
+      </div>
+    </div>
+    ${(ev.pendingSubmissions||[]).length ? `
+    <div class="panel" style="background:rgba(255,209,102,0.12);border-color:var(--accent-light);margin-bottom:14px;">
+      <h2 style="font-size:16px;">📋 待確認的動作偵測結果（${ev.pendingSubmissions.length}）</h2>
+      <div class="small-note" style="margin-bottom:8px;">目前是框架測試模式，數值是學生手動模擬的；可以直接確認套用，或先修改數字再套用。</div>
+      ${ev.pendingSubmissions.map(sub=>{
+        const rate = sub.type==='pushup' ? (ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3) : (ev.plankDamagePerSec!=null?ev.plankDamagePerSec:1);
+        const editVal = state.submissionEditDraft[sub.id];
+        const useVal = (editVal!=null && editVal!=='') ? Number(editVal) : sub.value;
+        const dmgPreview = Math.round(useVal*rate);
+        return `<div class="item-row" style="cursor:default;flex-wrap:wrap;">
+          <span style="min-width:80px;">${esc(sub.name)}</span>
+          <span class="small-note">${sub.type==='pushup'?'👊 伏地挺身':'🧘 棒式'}</span>
+          <input type="number" style="width:90px;" value="${editVal!=null?editVal:sub.value}" oninput="state.submissionEditDraft['${sub.id}']=this.value">
+          <span class="small-note">→ 預估傷害 ${dmgPreview}</span>
+          <button class="btn gold small" onclick="coachConfirmSubmission('${sub.id}')">✅ 確認套用</button>
+          <button class="btn secondary small" onclick="coachRejectSubmission('${sub.id}')">❌ 忽略</button>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <div class="flex-between"><h2 style="font-size:16px;margin:0;">👥 參加名單與傷害輸入</h2>
         <div style="display:flex;gap:6px;">
           <button class="btn secondary small" onclick="coachAddAllEventParticipants()">✅ 全選</button>
           <button class="btn secondary small" onclick="coachClearEventParticipants()">清空</button>
         </div>
       </div>
-      <div class="small-note" style="margin:8px 0;">「對Boss傷害」是這位選手這次表現造成的傷害（會扣Boss血量）；「選手受傷」是Boss對這位選手造成的傷害（會扣這位選手自己的血量）。每次輸入完按「套用」才會生效，可以重複套用多次（例如每一輪動作結束都套用一次）。</div>
+      <div class="small-note" style="margin:8px 0;">這裡是教練現場直接手動輸入用的（不透過相機）。「對Boss傷害」是這位選手這次表現造成的傷害（會扣Boss血量）；「選手受傷」是Boss對這位選手造成的傷害（會扣這位選手自己的血量）。每次輸入完按「套用」才會生效，可以重複套用多次。</div>
     ${participantRows}
       <div style="margin-top:10px;">
         <div class="small-note" style="margin-bottom:4px;">加入選手：</div>
