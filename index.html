@@ -2863,8 +2863,174 @@ async function coachEndEvent(){
   });
 }
 /* ---- 動作偵測（相機框架＋模擬數據，之後可換成真AI）---- */
+/* ---- AI 姿態辨識（延遲載入，只有進動作偵測畫面才會下載模型，不影響平常開啟App的速度）---- */
+function loadExternalScript(src){
+  return new Promise((resolve,reject)=>{
+    if(document.querySelector('script[data-src="'+src+'"]')){ resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src; s.dataset.src = src;
+    s.onload = ()=>resolve();
+    s.onerror = ()=>reject(new Error('無法載入 '+src));
+    document.head.appendChild(s);
+  });
+}
+let poseDetectorInstance = null;
+async function ensurePoseModel(){
+  if(poseDetectorInstance) return poseDetectorInstance;
+  if(!window.tf){
+    await loadExternalScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js');
+  }
+  if(!window.poseDetection){
+    await loadExternalScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js');
+  }
+  await tf.setBackend('webgl');
+  await tf.ready();
+  poseDetectorInstance = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+  });
+  return poseDetectorInstance;
+}
+function poseAngle(a,b,c){
+  // 計算 b 這個點形成的夾角（a-b-c），單位是度數；用來判斷棒式的肩-髖-踝是否呈一直線
+  const ab = {x:a.x-b.x, y:a.y-b.y};
+  const cb = {x:c.x-b.x, y:c.y-b.y};
+  const magAB = Math.hypot(ab.x,ab.y), magCB = Math.hypot(cb.x,cb.y);
+  if(magAB===0||magCB===0) return 180;
+  const cosAngle = Math.max(-1, Math.min(1, (ab.x*cb.x+ab.y*cb.y)/(magAB*magCB)));
+  return Math.acos(cosAngle)*180/Math.PI;
+}
+function keypointMap(keypoints){
+  const kp = {};
+  keypoints.forEach(k=>{ kp[k.name]=k; });
+  return kp;
+}
+function drawPoseSkeleton(canvas, video, keypoints){
+  if(!canvas || !video) return;
+  if(canvas.width!==video.videoWidth || canvas.height!==video.videoHeight){
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const CONNECTIONS = [
+    ['left_shoulder','right_shoulder'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],
+    ['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],
+    ['left_hip','left_knee'],['left_knee','left_ankle'],['right_hip','right_knee'],['right_knee','right_ankle']
+  ];
+  const kp = keypointMap(keypoints);
+  ctx.strokeStyle = '#FFAA00';
+  ctx.lineWidth = 4;
+  CONNECTIONS.forEach(([a,b])=>{
+    const pa=kp[a], pb=kp[b];
+    if(pa && pb && pa.score>0.3 && pb.score>0.3){
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+    }
+  });
+  ctx.fillStyle = '#4CAF50';
+  keypoints.forEach(k=>{
+    if(k.score>0.3){
+      ctx.beginPath();
+      ctx.arc(k.x, k.y, 5, 0, 2*Math.PI);
+      ctx.fill();
+    }
+  });
+}
+function processPushupFrame(keypoints, mc){
+  const kp = keypointMap(keypoints);
+  const ls=kp.left_shoulder, rs=kp.right_shoulder, lh=kp.left_hip, rh=kp.right_hip;
+  if(!ls||!rs||!lh||!rh || ls.score<0.3||rs.score<0.3||lh.score<0.3||rh.score<0.3) return;
+  const shoulderY = (ls.y+rs.y)/2;
+  const hipY = (lh.y+rh.y)/2;
+  const bodyLen = Math.abs(hipY-shoulderY) || 1;
+  if(!mc.poseState) mc.poseState = {phase:'up', refY:shoulderY, baseline:bodyLen};
+  const ps = mc.poseState;
+  const deltaRatio = (shoulderY - ps.refY) / ps.baseline;
+  const DOWN_THRESHOLD = 0.14, UP_THRESHOLD = 0.05;
+  if(ps.phase==='up'){
+    ps.refY = ps.refY*0.9 + shoulderY*0.1; // 站姿基準緩慢跟隨微調，容忍鏡頭角度小幅飄移
+    if(deltaRatio > DOWN_THRESHOLD) ps.phase = 'down';
+  } else if(ps.phase==='down'){
+    if(deltaRatio < UP_THRESHOLD){
+      ps.phase = 'up';
+      mc.value += 1;
+      const el = document.getElementById('motion-counter-value');
+      if(el) el.textContent = mc.value;
+    }
+  }
+}
+function processPlankFrame(keypoints, mc){
+  const kp = keypointMap(keypoints);
+  const ls=kp.left_shoulder, rs=kp.right_shoulder, lh=kp.left_hip, rh=kp.right_hip;
+  const la=kp.left_ankle, ra=kp.right_ankle, lk=kp.left_knee, rk=kp.right_knee;
+  if(!ls||!rs||!lh||!rh || ls.score<0.3||rs.score<0.3||lh.score<0.3||rh.score<0.3) return;
+  const shoulder = {x:(ls.x+rs.x)/2, y:(ls.y+rs.y)/2};
+  const hip = {x:(lh.x+rh.x)/2, y:(lh.y+rh.y)/2};
+  let far = null;
+  if(la && ra && la.score>0.3 && ra.score>0.3) far = {x:(la.x+ra.x)/2, y:(la.y+ra.y)/2};
+  else if(lk && rk && lk.score>0.3 && rk.score>0.3) far = {x:(lk.x+rk.x)/2, y:(lk.y+rk.y)/2};
+  if(!far) return;
+  const angle = poseAngle(shoulder, hip, far);
+  const isStraight = Math.abs(180-angle) < 25;
+  mc.formOk = isStraight;
+  if(isStraight){
+    if(!mc.running){ mc.running = true; mc.startedAt = Date.now() - (mc.value*1000); }
+    mc.value = Math.floor((Date.now()-mc.startedAt)/1000);
+    const el = document.getElementById('motion-counter-value');
+    if(el) el.textContent = mc.value;
+  } else {
+    if(mc.running) mc.running = false;
+  }
+}
+async function startPoseDetectionLoop(){
+  const mc = state.showMotionCapture;
+  if(!mc) return;
+  mc.modelLoading = true;
+  render();
+  let detector;
+  try{
+    detector = await ensurePoseModel();
+  }catch(e){
+    if(state.showMotionCapture===mc){
+      mc.modelLoading = false;
+      mc.aiError = 'AI 模型載入失敗（'+(e&&e.message?e.message:'未知錯誤')+'），可以直接用下面手動輸入或用按鈕模擬完成回報。';
+      render();
+    }
+    return;
+  }
+  if(state.showMotionCapture!==mc) return; // 使用者在模型載入期間關閉了畫面
+  mc.modelLoading = false;
+  mc.aiActive = true;
+  render();
+  const loop = async ()=>{
+    if(state.showMotionCapture!==mc) return; // 畫面已關閉，停止偵測迴圈
+    try{
+      const video = document.getElementById('motion-camera-video');
+      const canvas = document.getElementById('motion-skeleton-canvas');
+      if(video && video.readyState>=2){
+        const poses = await detector.estimatePoses(video);
+        if(poses && poses[0] && poses[0].keypoints){
+          const kps = poses[0].keypoints;
+          drawPoseSkeleton(canvas, video, kps);
+          const avgScore = kps.reduce((s,k)=>s+k.score,0)/kps.length;
+          mc.personDetected = avgScore>0.25;
+          const badge = document.getElementById('motion-detect-badge');
+          if(badge) badge.textContent = mc.personDetected ? '✅ 偵測到你了' : '👀 找不到人，請對準鏡頭';
+          if(mc.personDetected){
+            if(mc.type==='pushup') processPushupFrame(kps, mc);
+            else processPlankFrame(kps, mc);
+          }
+        }
+      }
+    }catch(e){ /* 單一影格偵測失敗就跳過，不中斷整個迴圈 */ }
+    mc._rafHandle = requestAnimationFrame(loop);
+  };
+  loop();
+}
 async function openMotionCapture(type){
-  state.showMotionCapture = { type, value:0, running:false, startedAt:null, cameraOk:false, cameraError:null };
+  state.showMotionCapture = { type, value:0, running:false, startedAt:null, cameraOk:false, cameraError:null, modelLoading:false, aiActive:false, aiError:null, personDetected:false, formOk:null };
   render();
   try{
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
@@ -2876,8 +3042,9 @@ async function openMotionCapture(type){
     render();
     requestAnimationFrame(()=>{
       const v = document.getElementById('motion-camera-video');
-      if(v){ v.srcObject = stream; v.play().catch(()=>{}); }
+      if(v){ v.srcObject = stream; try{ const p=v.play(); if(p && p.catch) p.catch(()=>{}); }catch(e){} }
     });
+    startPoseDetectionLoop();
   }catch(e){
     if(state.showMotionCapture) state.showMotionCapture.cameraError = '無法開啟相機（'+(e&&e.message?e.message:'未知錯誤')+'），可以直接用下面手動輸入完成回報。';
     render();
@@ -2890,6 +3057,7 @@ function closeMotionCapture(){
   }
   const mc = state.showMotionCapture;
   if(mc && mc._timerHandle) clearInterval(mc._timerHandle);
+  if(mc && mc._rafHandle) cancelAnimationFrame(mc._rafHandle);
   state.showMotionCapture = null;
   render();
 }
@@ -3674,7 +3842,7 @@ function render(){
     const v = document.getElementById('motion-camera-video');
     if(v && v.srcObject !== state.motionCameraStream){
       v.srcObject = state.motionCameraStream;
-      v.play().catch(()=>{});
+      try{ const p=v.play(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
     }
   }
 }
@@ -4153,10 +4321,18 @@ function renderMotionCaptureModal(){
   <div class="modal-bg" onclick="if(event.target===this){closeMotionCapture();}">
     <div class="modal" style="max-width:420px;text-align:center;">
       <div class="flex-between"><h3 style="margin:0;">📷 ${isPushup?'伏地挺身':'棒式'}偵測</h3><button class="btn secondary small" onclick="closeMotionCapture()">✕ 關閉</button></div>
-      <div class="small-note" style="margin:6px 0 10px;color:var(--accent-light);">⚠️ 框架測試模式：還沒接上真的 AI 動作辨識，請先用下面按鈕模擬動作次數／時間，之後會換成自動偵測，操作流程不會變。</div>
+      ${mc.aiActive ? `
+        <div class="small-note" style="margin:6px 0 10px;color:var(--accent-green);">🤖 AI 自動偵測中，${isPushup?'手肘彎曲下降再回到起始位置算一下':'保持肩－髖－腳踝呈一直線就會持續計時'}。手機請立好，讓鏡頭能拍到你的全身或至少上半身＋髖部。</div>
+      ` : mc.modelLoading ? `
+        <div class="small-note" style="margin:6px 0 10px;color:var(--accent-light);">🤖 AI 模型下載中，第一次使用會需要幾秒鐘，請稍候…</div>
+      ` : mc.aiError ? `
+        <div class="small-note" style="margin:6px 0 10px;color:var(--accent-red);">⚠️ ${esc(mc.aiError)}</div>
+      ` : ''}
       ${mc.cameraOk ? `
-        <div style="border-radius:10px;overflow:hidden;background:#000;box-shadow:0 0 0 2px #000;">
-          <video id="motion-camera-video" autoplay playsinline muted style="width:100%;max-height:260px;object-fit:cover;transform:scaleX(-1);"></video>
+        <div style="position:relative;border-radius:10px;overflow:hidden;background:#000;box-shadow:0 0 0 2px #000;">
+          <video id="motion-camera-video" autoplay playsinline muted style="width:100%;max-height:280px;object-fit:cover;transform:scaleX(-1);display:block;"></video>
+          <canvas id="motion-skeleton-canvas" style="position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;"></canvas>
+          ${mc.aiActive ? `<div id="motion-detect-badge" style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:11px;padding:4px 8px;border-radius:12px;">👀 找不到人，請對準鏡頭</div>` : ''}
         </div>
       ` : mc.cameraError ? `
         <div class="panel" style="background:rgba(228,87,46,0.14);border-color:var(--accent-red);text-align:left;">
@@ -4164,17 +4340,19 @@ function renderMotionCaptureModal(){
         </div>
       ` : `<div class="small-note">📷 正在請求相機權限…</div>`}
       <div style="margin:16px 0;">
-        <div class="small-note">${isPushup?'目前次數':'目前秒數'}</div>
+        <div class="small-note">${isPushup?'目前次數（AI自動計數）':'目前秒數（AI自動計時）'}</div>
         <div id="motion-counter-value" style="font-family:var(--font-display);font-size:44px;color:var(--accent-light);">${mc.value}</div>
+        ${(!isPushup && mc.aiActive) ? `<div class="small-note" style="color:${mc.formOk===false?'var(--accent-red)':'var(--accent-green)'};">${mc.formOk===false?'⚠️ 姿勢跑掉了，喬正後會繼續計時':(mc.formOk?'✔ 姿勢正確，計時中':'')}</div>` : ''}
       </div>
-      ${isPushup ? `
-        <button class="btn gold" style="width:100%;padding:14px;font-size:16px;" onclick="motionTapRep()">👊 完成一下（模擬用，點一下+1）</button>
-      ` : `
-        <button class="btn ${mc.running?'secondary':'gold'}" style="width:100%;padding:14px;font-size:16px;" onclick="motionTogglePlankTimer()">${mc.running?'⏸ 停止計時':'▶️ 開始撐棒式計時'}</button>
-      `}
-      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);">
-        <div class="small-note" style="margin-bottom:6px;">或直接手動輸入結果（${isPushup?'次數':'秒數'}）：</div>
-        <input type="number" placeholder="${isPushup?'例如：15':'例如：45'}" oninput="motionSetManualValue(this.value)">
+      <div style="margin-top:10px;padding-top:12px;border-top:1px dashed var(--line);">
+        <div class="small-note" style="margin-bottom:6px;">手動調整（AI 算錯的話可以自己補）：</div>
+        ${isPushup ? `
+          <button class="btn secondary" style="width:100%;padding:10px;" onclick="motionTapRep()">👊 手動 +1 下</button>
+        ` : `
+          <button class="btn secondary" style="width:100%;padding:10px;" onclick="motionTogglePlankTimer()">${mc.running?'⏸ 手動停止計時':'▶️ 手動開始計時'}</button>
+        `}
+        <div class="small-note" style="margin:8px 0 4px;">或直接輸入正確結果（${isPushup?'次數':'秒數'}）：</div>
+        <input type="number" placeholder="${isPushup?'例如：15':'例如：45'}" value="${mc.value||''}" oninput="motionSetManualValue(this.value)">
       </div>
       <button class="btn gold" style="width:100%;margin-top:14px;padding:12px;font-size:15px;" onclick="submitMotionResult()">✅ 完成！送出給教練確認</button>
     </div>
