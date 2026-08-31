@@ -3465,20 +3465,23 @@ function npcPathCSS(i, walkName, faceName){
   }
   return `@keyframes ${walkName}{${walkKF}} @keyframes ${faceName}{${faceKF}}`;
 }
+function anyLobbyModalOpen(){
+  return !!(state.showCreatePlayerModal || state.pendingPlayerUnlock || state.showTeamRules || state.showTutorial || state.showLobbyLeaderboard);
+}
 function startNpcChat(){
   if(npcChatTimer) return;
   npcChatTimer = setInterval(()=>{
     const chips = state.playerChips || [];
     if(state.currentPlayer || chips.length===0) return;
-    // 如果正在填寫表單（建立角色／輸入PIN），先不要重繪，避免打字打到一半游標被打斷跳掉
-    if(state.showCreatePlayerModal || state.pendingPlayerUnlock) return;
+    // 如果正在看內容（建立角色／輸入PIN／隊規／指南／排行榜），先不要重繪，避免打字或捲動被打斷跳回
+    if(anyLobbyModalOpen()) return;
     const idx = Math.floor(Math.random()*chips.length);
     const line = NPC_CHAT_LINES[Math.floor(Math.random()*NPC_CHAT_LINES.length)];
     state.npcChat = { index: idx, line };
     render();
     setTimeout(()=>{
       if(state.npcChat && state.npcChat.index===idx){
-        if(state.showCreatePlayerModal || state.pendingPlayerUnlock) return;
+        if(anyLobbyModalOpen()) return;
         state.npcChat = null; render();
       }
     }, 3000);
@@ -4089,6 +4092,27 @@ function renderQuizInline(){
     ${resultLine}
     ${reactionHtml}`;
 }
+function renderLobbyLeaderboardModal(){
+  const rows = leaderboardCache.map((pl,i)=>{
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
+    const ch = effectiveCharacter(pl);
+    return `<div class="item-row" style="cursor:default;flex-wrap:wrap;">
+      <span style="font-family:var(--font-display);font-size:16px;width:28px;flex-shrink:0;">${medal}</span>
+      ${ch?`<img src="${ch.image}" style="width:26px;height:26px;image-rendering:pixelated;margin-right:6px;">`:''}
+      <span style="font-weight:600;">${esc(pl.realName||pl.name)}</span>
+      <span class="small-note" style="margin-left:4px;">（${esc(pl.name)}）</span>
+      <span class="xp-tag" style="margin-left:auto;">Lv.${pl.level} ・ ${pl.points}點</span>
+    </div>`;
+  }).join('') || '<div class="empty">還沒有排名資料</div>';
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){state.showLobbyLeaderboard=false;render();}">
+    <div class="modal" style="max-width:420px;max-height:80vh;overflow-y:auto;">
+      <div class="flex-between"><h3 style="margin:0;">🏆 本日排名</h3><button class="btn secondary small" onclick="state.showLobbyLeaderboard=false;render();">✕ 關閉</button></div>
+      <div class="small-note" style="margin:8px 0 12px;">依等級與點數排名，前 10 名，給家長們方便觀看小朋友的表現</div>
+      ${rows}
+    </div>
+  </div>`;
+}
 function renderLeaderboardModal(){
   const me = state.playerData;
   const myMaxHp = playerMaxHp();
@@ -4615,10 +4639,12 @@ function renderPlayerRole(){
     ${state.showCreatePlayerModal ? renderCreatePlayerModal() : ''}
     ${state.showTeamRules ? renderTeamRulesModal() : ''}`;
     return `
-    <div style="text-align:right;margin-bottom:-4px;">
+    <div style="text-align:right;margin-bottom:-4px;display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn secondary small" style="border-radius:50%;width:34px;height:34px;padding:0;font-size:16px;" onclick="state.showLobbyLeaderboard=true;leaderboardCache=[];refreshLeaderboard();render();" title="排行榜">🏆</button>
       <button class="btn secondary small" style="border-radius:50%;width:34px;height:34px;padding:0;font-size:16px;" onclick="openTutorial()" title="新手先發指南">❓</button>
     </div>
     ${state.showTutorial ? renderTutorialModal() : ''}
+    ${state.showLobbyLeaderboard ? renderLobbyLeaderboardModal() : ''}
 
     <div class="panel" style="padding:10px 16px;display:flex;align-items:center;gap:12px;">
       <img src="${TEAM_PHOTO}" alt="球隊" style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;">
