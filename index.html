@@ -1757,6 +1757,7 @@ let state = {
   spinResult: null,
   addSpinPrizeDraft: {name:'', weight:10, pointsValue:0},
   spinTicketDraft: {},
+  suppressRender: false,
   videoUploadedDraft: false,
   viewingPlayer: null,
   formUrlDraft: '',
@@ -2669,12 +2670,13 @@ async function doSpin(){
   state.spinning = true;
   state.spinResult = null;
   render();
-  // render() 會整個重建 DOM，CSS transition 沒辦法從舊畫面自然動畫過去，
-  // 所以先讓輪盤停在目前角度畫面穩定後，直接操作同一個 DOM 節點觸發轉場動畫
+  // 轉動期間暫停其他背景重繪（例如提示訊息消失的計時器），避免整頁重建把正在轉的輪盤打斷造成卡頓
+  state.suppressRender = true;
   requestAnimationFrame(()=>{
     requestAnimationFrame(()=>{
       const el = document.getElementById('spin-wheel-disc');
       if(el){
+        el.style.willChange = 'transform';
         el.style.transition = 'transform 4s cubic-bezier(0.12,0.75,0.15,1)';
         el.style.transform = 'rotate('+targetRotation+'deg)';
       }
@@ -2683,16 +2685,22 @@ async function doSpin(){
   setTimeout(async ()=>{
     const prize = prizes[winIdx];
     let extraTicket = false;
-    if(prize.pointsValue) p.points += prize.pointsValue;
-    if(/再抽一次/.test(prize.name)){ p.spinTickets += 1; extraTicket = true; }
-    if(!p.spinLog) p.spinLog = [];
-    p.spinLog.unshift({date:todayStr(), name:prize.name, pointsValue:prize.pointsValue||0});
-    p.spinLog = p.spinLog.slice(0,20);
-    await savePlayer(p);
-    state.spinning = false;
-    state.spinResult = prize;
-    state.spinRotation = targetRotation % 360;
-    render();
+    try{
+      if(prize.pointsValue) p.points += prize.pointsValue;
+      if(/再抽一次/.test(prize.name)){ p.spinTickets += 1; extraTicket = true; }
+      if(!p.spinLog) p.spinLog = [];
+      p.spinLog.unshift({date:todayStr(), name:prize.name, pointsValue:prize.pointsValue||0});
+      p.spinLog = p.spinLog.slice(0,20);
+      await savePlayer(p);
+    } catch(e){
+      showToast('儲存抽獎結果時發生問題，請稍後重新整理確認');
+    } finally {
+      state.spinning = false;
+      state.spinResult = prize;
+      state.spinRotation = targetRotation % 360;
+      state.suppressRender = false;
+      render();
+    }
     showToast('🎉 抽中「'+prize.name+'」！'+(prize.pointsValue?('+'+prize.pointsValue+' 點數'):'')+(extraTicket?'（獲得額外一次抽獎機會！）':''));
   }, 4200);
 }
@@ -3352,6 +3360,7 @@ function monsterVisualHtml(boss, sizeClass){
 }
 
 function render(){
+  if(state.suppressRender) return;
   const app = document.getElementById('app');
   if(state.loading){ app.innerHTML = '<div class="empty">載入中...</div>'; return; }
   if(state.role==='coach' && !state.coachUnlocked){ state.role = 'player'; }
