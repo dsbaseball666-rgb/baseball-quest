@@ -1032,6 +1032,7 @@ async function getConfig(){
     if(!parsed.event) parsed.event = buildDefaultConfig().event;
     if(!parsed.event.participants) parsed.event.participants = [];
     if(!parsed.event.log) parsed.event.log = [];
+    if(parsed.event.bossImage===undefined) parsed.event.bossImage = null;
     (parsed.items||[]).forEach(it=>{
       if(it.subOptions==null) it.subOptions = [];
       it.subOptions = it.subOptions.map(o=> typeof o==='string' ? {label:o, xp:5, points:0} : o);
@@ -2772,6 +2773,7 @@ async function coachSaveEventSetup(){
     startTime: d.startTime,
     bossName: d.bossName.trim(),
     bossEmoji: d.bossEmoji||'🔥',
+    bossImage: d.bossImage||null,
     bossHp: maxHp,
     bossMaxHp: maxHp,
     participants: state.config.event.participants||[],
@@ -2779,6 +2781,33 @@ async function coachSaveEventSetup(){
   };
   await saveConfig(state.config);
   showToast('活動設定已儲存！記得到下面加入參加的選手，並在時間到時按「開始活動」');
+  render();
+}
+function coachRandomizeEventBoss(){
+  const roster = state.config.bossRoster || DEFAULT_BOSS_ROSTER;
+  const withImage = roster.filter(b=>b.image);
+  const pool = withImage.length ? withImage : roster;
+  if(!pool.length){ showToast('怪物圖鑑目前是空的，請先到「Boss／技能／職業設定」新增怪物'); return; }
+  const pick = pool[Math.floor(Math.random()*pool.length)];
+  state.eventSetupDraft.bossName = pick.name;
+  state.eventSetupDraft.bossEmoji = pick.emoji || '🔥';
+  state.eventSetupDraft.bossImage = pick.image || null;
+  showToast('已自動帶入「'+pick.name+'」，記得按下面「💾 儲存活動設定」套用');
+  render();
+}
+async function coachAddAllEventParticipants(){
+  const ev = state.config.event;
+  const names = await listPlayers();
+  ev.participants = names.slice();
+  await saveConfig(state.config);
+  showToast('已將全部 '+names.length+' 位球員加入參加名單');
+  render();
+}
+async function coachClearEventParticipants(){
+  const ev = state.config.event;
+  ev.participants = [];
+  await saveConfig(state.config);
+  showToast('已清空參加名單');
   render();
 }
 async function coachToggleEventParticipant(name){
@@ -3968,7 +3997,7 @@ function renderEventLobbyModal(){
       <div class="flex-between"><h3 style="margin:0;">🎪 ${esc(ev.name||'團隊活動')}</h3><button class="btn secondary small" onclick="state.showEventLobby=false;render();">✕ 關閉</button></div>
       <div class="small-note" style="margin:8px 0 12px;">全隊一起挑戰活動 Boss！教練會依大家的表現，現場輸入造成的傷害跟受到的傷害，密切留意血條變化。</div>
       <div class="panel" style="background:var(--bg-panel-2);text-align:center;">
-        <div style="font-size:44px;">${esc(ev.bossEmoji||'🔥')}</div>
+        ${ev.bossImage ? `<img src="${ev.bossImage}" style="width:72px;height:72px;image-rendering:pixelated;border-radius:10px;filter:drop-shadow(0 0 16px rgba(228,87,46,0.6));">` : `<div style="font-size:44px;">${esc(ev.bossEmoji||'🔥')}</div>`}
         <div class="monster-name" style="font-size:16px;">${esc(ev.bossName||'活動 Boss')}</div>
         <div class="hp-bar-outer" style="max-width:280px;"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
         <div class="small-note">HP ${ev.bossHp||0} / ${ev.bossMaxHp||0}</div>
@@ -5454,6 +5483,7 @@ function renderCoachRole(){
     const nonParticipants = state.players.filter(n=>!(ev.participants||[]).includes(n));
     const addParticipantOptions = nonParticipants.map(n=>`<button class="btn secondary small" style="margin:3px;" onclick="coachToggleEventParticipant('${esc(n)}')">＋ ${esc(n)}</button>`).join('') || '<span class="small-note">所有球員都已加入</span>';
     const eventLog = (ev.log||[]).slice(0,15).map(l=>`<div class="small-note">${esc(l.date)} · ${esc(l.name)} ${l.dmgToBoss?('對Boss -'+l.dmgToBoss):''} ${l.dmgTaken?('自己受傷 -'+l.dmgTaken):''}</div>`).join('');
+    const draftBossImage = state.eventSetupDraft.bossImage!==undefined ? state.eventSetupDraft.bossImage : ev.bossImage;
     body = `
     <div class="panel" style="background:${ev.active?'rgba(42,157,143,0.12)':'var(--bg-panel-2)'};border-color:${ev.active?'var(--accent-green)':'var(--line)'};margin-bottom:14px;">
       <h2 style="font-size:16px;">${ev.active?'🟢 活動進行中':'⚙️ 活動設定'}</h2>
@@ -5461,25 +5491,34 @@ function renderCoachRole(){
         <div><label>活動名稱</label><input type="text" value="${esc(state.eventSetupDraft.name||ev.name||'')}" oninput="state.eventSetupDraft.name=this.value" placeholder="例如：暑期團練 Boss 挑戰賽"></div>
         <div><label>開始時間</label><input type="datetime-local" value="${esc(state.eventSetupDraft.startTime||(ev.startTime?ev.startTime.slice(0,16):''))}" oninput="state.eventSetupDraft.startTime=this.value"></div>
       </div>
-      <div class="row-flex" style="margin-top:10px;">
-        <div style="max-width:90px;"><label>Boss圖示</label><input type="text" value="${esc(state.eventSetupDraft.bossEmoji||ev.bossEmoji||'🔥')}" oninput="state.eventSetupDraft.bossEmoji=this.value"></div>
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;">
+        <div style="width:64px;height:64px;flex-shrink:0;border-radius:10px;background:var(--bg-deep);display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 0 0 2px #000;">
+          ${draftBossImage ? `<img src="${draftBossImage}" style="width:100%;height:100%;object-fit:cover;image-rendering:pixelated;">` : `<span style="font-size:32px;">${esc(state.eventSetupDraft.bossEmoji||ev.bossEmoji||'🔥')}</span>`}
+        </div>
         <div><label>活動 Boss 名稱</label><input type="text" value="${esc(state.eventSetupDraft.bossName||ev.bossName||'')}" oninput="state.eventSetupDraft.bossName=this.value" placeholder="例如：夏日烈焰王"></div>
         <div style="max-width:110px;"><label>Boss 血量</label><input type="number" value="${state.eventSetupDraft.bossHp||ev.bossMaxHp||100}" oninput="state.eventSetupDraft.bossHp=this.value"></div>
+        <div style="flex:0;"><button class="btn gold" onclick="coachRandomizeEventBoss()">🎲 自動生成怪物</button></div>
       </div>
+      <div class="small-note" style="margin-top:6px;">按「自動生成怪物」會從你的怪物圖鑑（40隻正式插畫）隨機挑一隻威風的來當這次活動的 Boss，名稱跟圖片會自動帶入，記得再按下面「儲存活動設定」套用。</div>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn secondary" onclick="coachSaveEventSetup()">💾 儲存活動設定</button>
         ${ev.active ? `<button class="btn secondary" style="color:var(--accent-red);" onclick="coachEndEvent()">🛑 結束活動</button>` : `<button class="btn gold" onclick="coachStartEvent()">▶️ 開始活動</button>`}
       </div>
-      <div class="small-note" style="margin-top:10px;">目前設定：${esc(ev.name||'尚未設定')} ・ 開始時間 ${startLocal} ・ Boss：${esc(ev.bossEmoji||'')} ${esc(ev.bossName||'')}</div>
+      <div class="small-note" style="margin-top:10px;">目前設定：${esc(ev.name||'尚未設定')} ・ 開始時間 ${startLocal} ・ Boss：${esc(ev.bossName||'')}</div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
-      <h2 style="font-size:16px;">${esc(ev.bossEmoji||'🔥')} Boss 血量：${ev.bossHp||0} / ${ev.bossMaxHp||0}</h2>
+      <h2 style="font-size:16px;display:flex;align-items:center;gap:8px;">${ev.bossImage?`<img src="${ev.bossImage}" style="width:28px;height:28px;border-radius:6px;image-rendering:pixelated;">`:esc(ev.bossEmoji||'🔥')} Boss 血量：${ev.bossHp||0} / ${ev.bossMaxHp||0}</h2>
       <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
-      <h2 style="font-size:16px;">👥 參加名單與傷害輸入</h2>
-      <div class="small-note" style="margin-bottom:8px;">「對Boss傷害」是這位選手這次表現造成的傷害（會扣Boss血量）；「選手受傷」是Boss對這位選手造成的傷害（會扣這位選手自己的血量）。每次輸入完按「套用」才會生效，可以重複套用多次（例如每一輪動作結束都套用一次）。</div>
-      ${participantRows}
+      <div class="flex-between"><h2 style="font-size:16px;margin:0;">👥 參加名單與傷害輸入</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn secondary small" onclick="coachAddAllEventParticipants()">✅ 全選</button>
+          <button class="btn secondary small" onclick="coachClearEventParticipants()">清空</button>
+        </div>
+      </div>
+      <div class="small-note" style="margin:8px 0;">「對Boss傷害」是這位選手這次表現造成的傷害（會扣Boss血量）；「選手受傷」是Boss對這位選手造成的傷害（會扣這位選手自己的血量）。每次輸入完按「套用」才會生效，可以重複套用多次（例如每一輪動作結束都套用一次）。</div>
+    ${participantRows}
       <div style="margin-top:10px;">
         <div class="small-note" style="margin-bottom:4px;">加入選手：</div>
         ${addParticipantOptions}
