@@ -465,7 +465,8 @@ function buildDefaultConfig(){
       bossName:'', bossEmoji:'🔥', bossHp:0, bossMaxHp:0,
       participants:[], log:[],
       pushupDamagePerRep:3, plankDamagePerSec:1,
-      pendingSubmissions:[]
+      pendingSubmissions:[],
+      rewards:[]
     },
     skillRoster: [
       // 劍士 c_swordsman：近戰爆發流
@@ -1040,6 +1041,7 @@ async function getConfig(){
     if(parsed.event.pushupDamagePerRep==null) parsed.event.pushupDamagePerRep = 3;
     if(parsed.event.plankDamagePerSec==null) parsed.event.plankDamagePerSec = 1;
     if(!parsed.event.pendingSubmissions) parsed.event.pendingSubmissions = [];
+    if(!parsed.event.rewards) parsed.event.rewards = [];
     (parsed.items||[]).forEach(it=>{
       if(it.subOptions==null) it.subOptions = [];
       it.subOptions = it.subOptions.map(o=> typeof o==='string' ? {label:o, xp:5, points:0} : o);
@@ -1811,7 +1813,8 @@ let state = {
   goalReplyDraft: {},
   showJournalDetail: null,
   journalDetailData: null,
-  journalEntryReplyDraft: {}
+  journalEntryReplyDraft: {},
+  addEventRewardDraft: {name:'', pointsValue:0, desc:''}
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -3138,6 +3141,50 @@ async function coachUpdateEventRate(field, raw){
   await saveConfig(state.config);
   showToast('已更新換算倍率');
   render();
+}
+async function coachAddEventReward(){
+  const d = state.addEventRewardDraft;
+  if(!d.name.trim()){ showToast('請輸入獎勵名稱'); return; }
+  const id = 'er_'+Date.now();
+  if(!state.config.event.rewards) state.config.event.rewards = [];
+  state.config.event.rewards.push({id, name:d.name.trim(), pointsValue:Number(d.pointsValue)||0, desc:(d.desc||'').trim()});
+  await saveConfig(state.config);
+  state.addEventRewardDraft = {name:'', pointsValue:0, desc:''};
+  showToast('已新增活動獎勵');
+  render();
+}
+async function coachDeleteEventReward(id){
+  askConfirm('確定要刪除這個獎勵嗎？', async ()=>{
+    state.config.event.rewards = (state.config.event.rewards||[]).filter(r=>r.id!==id);
+    await saveConfig(state.config);
+    showToast('已刪除');
+    render();
+  });
+}
+async function coachGrantEventReward(rewardId, target){
+  if(!rewardId){ showToast('請先選擇要發放的獎勵'); return; }
+  const ev = state.config.event;
+  const reward = (ev.rewards||[]).find(r=>r.id===rewardId);
+  if(!reward) return;
+  const names = target==='all' ? (ev.participants||[]).slice() : [target];
+  if(!names.length){ showToast('沒有參加者可以發放'); return; }
+  askConfirm('確定要把「'+reward.name+'」發放給'+(target==='all'?('全部 '+names.length+' 位參加者'):target)+'嗎？', async ()=>{
+    for(const name of names){
+      const p = await getPlayer(name);
+      if(!p) continue;
+      if(reward.pointsValue) p.points += reward.pointsValue;
+      if(!p.inventory) p.inventory = [];
+      p.inventory.push({
+        id: 'inv_'+Date.now()+'_'+name,
+        itemId: reward.id, itemName: reward.name+'（活動獎勵）',
+        cost: 0, purchaseDate: todayStr(), useDate: null, status: 'unused', usedAt: null
+      });
+      await savePlayer(p);
+    }
+    showToast('已發放「'+reward.name+'」給 '+names.length+' 位選手');
+    eventParticipantsCache = [];
+    await refreshEventParticipants();
+  });
 }
 async function coachApplyEventDamage(name){
   const d = state.eventDamageDraft[name] || {};
@@ -6016,6 +6063,7 @@ function renderCoachRole(){
     if(eventParticipantsCache.length===0 && (ev.participants||[]).length>0){ refreshEventParticipants(); }
     const hpByName = {};
     eventParticipantsCache.forEach(pl=>{ hpByName[pl.name] = pl.hp!=null ? pl.hp : playerMaxHp(); });
+    const rewardOptionsHtml = (ev.rewards||[]).map(r=>`<option value="${r.id}">🎁 ${esc(r.name)}</option>`).join('');
     const participantRows = (ev.participants||[]).map(name=>{
       const dd = state.eventDamageDraft[name] || {};
       const hp = hpByName[name];
@@ -6025,6 +6073,12 @@ function renderCoachRole(){
         <input type="number" placeholder="選手受傷" style="width:100px;" value="${dd.taken||''}" oninput="state.eventDamageDraft['${esc(name)}']=Object.assign({},state.eventDamageDraft['${esc(name)}'],{taken:this.value})">
         <button class="btn secondary small" onclick="coachApplyEventDamage('${esc(name)}')">套用</button>
         <button class="btn secondary small" style="color:var(--accent-red);" onclick="coachToggleEventParticipant('${esc(name)}')">移除</button>
+        ${(ev.rewards||[]).length ? `
+        <select style="width:130px;" onchange="state.eventDamageDraft['${esc(name)}']=Object.assign({},state.eventDamageDraft['${esc(name)}'],{rewardId:this.value})">
+          <option value="">選個別獎勵</option>${rewardOptionsHtml}
+        </select>
+        <button class="btn gold small" onclick="coachGrantEventReward((state.eventDamageDraft['${esc(name)}']||{}).rewardId,'${esc(name)}')">🎁 單獨發放</button>
+        ` : ''}
       </div>`;
     }).join('') || '<div class="empty">尚未加入任何選手</div>';
     const nonParticipants = state.players.filter(n=>!(ev.participants||[]).includes(n));
@@ -6056,6 +6110,25 @@ function renderCoachRole(){
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;display:flex;align-items:center;gap:8px;">${ev.bossImage?`<img src="${ev.bossImage}" style="width:28px;height:28px;border-radius:6px;image-rendering:pixelated;">`:esc(ev.bossEmoji||'🔥')} Boss 血量：${ev.bossHp||0} / ${ev.bossMaxHp||0}</h2>
       <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
+      ${ev.bossMaxHp>0 && ev.bossHp<=0 ? '<div class="small-note" style="margin-top:8px;color:var(--accent-green);">🎉 Boss 被擊敗了！記得到下面發放活動獎勵給參加的選手～</div>' : ''}
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">🎁 活動獎勵</h2>
+      <div class="small-note" style="margin-bottom:8px;">打倒 Boss 或活動結束後，可以把獎勵發放給參加的選手，物品會直接出現在他們的物品欄，點數也會馬上入帳。</div>
+      ${(ev.rewards||[]).length ? (ev.rewards||[]).map(r=>`
+        <div class="item-row" style="cursor:default;flex-wrap:wrap;">
+          <span style="min-width:100px;">🎁 ${esc(r.name)}</span>
+          ${r.pointsValue?`<span class="xp-tag">+${r.pointsValue} 點數</span>`:''}
+          ${r.desc?`<span class="small-note">${esc(r.desc)}</span>`:''}
+          <button class="btn gold small" onclick="coachGrantEventReward('${r.id}','all')">🎁 發放給全部參加者</button>
+          <button class="btn secondary small" style="color:var(--accent-red);" onclick="coachDeleteEventReward('${r.id}')">刪除</button>
+        </div>`).join('') : '<div class="empty">尚未設定活動獎勵，請在下面新增</div>'}
+      <div class="row-flex" style="margin-top:12px;">
+        <div><label>獎勵名稱</label><input type="text" value="${esc(state.addEventRewardDraft.name)}" oninput="state.addEventRewardDraft.name=this.value" placeholder="例如：活動限定小獎品"></div>
+        <div style="max-width:110px;"><label>附贈點數</label><input type="number" value="${state.addEventRewardDraft.pointsValue}" oninput="state.addEventRewardDraft.pointsValue=this.value"></div>
+      </div>
+      <div style="margin-top:8px;"><label>備註（選填）</label><input type="text" value="${esc(state.addEventRewardDraft.desc)}" oninput="state.addEventRewardDraft.desc=this.value" placeholder="例如：打倒 Boss 的紀念獎品"></div>
+      <div style="margin-top:12px;"><button class="btn secondary" onclick="coachAddEventReward()">新增活動獎勵</button></div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;">📷 動作偵測換算倍率</h2>
