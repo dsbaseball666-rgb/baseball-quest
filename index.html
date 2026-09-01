@@ -2057,7 +2057,7 @@ async function finalizeSpecialItem(itemId, extra){
     video: false, needsReview: false, reviewStatus: 'approved',
     journal: (extra && extra.journal) || null
   });
-  p.log = p.log.slice(0, 20);
+  p.log = trimPlayerLog(p.log, 20);
   await savePlayer(p);
   render();
   return r;
@@ -2154,10 +2154,23 @@ function setSubCustom(itemId, text){
 }
 
 function doneNamesToday(p){
-  const today = todayStr();
+  return doneNamesOnDate(p, todayStr());
+}
+function doneNamesOnDate(p, dateStr){
   const names = new Set();
-  p.log.filter(l=>l.date===today).forEach(l=>l.items.forEach(it=>names.add(logItemName(it))));
+  (p.log||[]).filter(l=>l.date===dateStr).forEach(l=>l.items.forEach(it=>names.add(logItemName(it))));
   return names;
+}
+function trimPlayerLog(log, maxLen){
+  maxLen = maxLen || 20;
+  if(log.length <= maxLen) return log;
+  // 待審核（教練還沒處理）的紀錄一定要保留，不管它排在陣列裡多後面，避免教練忘記審核時被舊資料悄悄擠掉、永遠看不到
+  const isPending = l => l.needsReview && l.reviewStatus==='pending';
+  const pending = log.filter(isPending);
+  const others = log.filter(l => !isPending(l));
+  const keepOthers = others.slice(0, Math.max(0, maxLen - pending.length));
+  const keepSet = new Set([...pending, ...keepOthers]);
+  return log.filter(l => keepSet.has(l)); // 保留原本新到舊的排列順序
 }
 
 async function submitPractice(){
@@ -2228,7 +2241,7 @@ async function submitPractice(){
     reviewStatus: needsVideo ? 'pending' : 'approved',
     journal: logJournal
   });
-  p.log = p.log.slice(0,20);
+  p.log = trimPlayerLog(p.log, 20);
   await savePlayer(p);
   checklistDraft = {};
   subDraft = {};
@@ -3782,17 +3795,21 @@ async function refreshDailyTasks(){
   for(const n of names){
     const p = normalizePlayer(await getPlayer(n));
     if(!p) continue;
-    const doneToday = doneNamesToday(p);
     const pendingEntries = [];
     (p.log||[]).forEach((entry,idx)=>{
       if(entry.reviewStatus==='pending'){
         pendingEntries.push({ index: idx, date: entry.date, items: (entry.items||[]).map(logItemName), detail: entry.items });
       }
     });
-    data.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level, doneToday, pending: pendingEntries });
+    data.push({ name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level, log: p.log||[], pending: pendingEntries });
   }
   dailyTasksCache = data;
   render();
+}
+function doneNamesFromLog(log, dateStr){
+  const names = new Set();
+  (log||[]).filter(l=>l.date===dateStr).forEach(l=>l.items.forEach(it=>names.add(logItemName(it))));
+  return names;
 }
 let journalsCache = [];
 async function refreshJournals(){
@@ -5823,13 +5840,16 @@ function renderCoachRole(){
     </div>`;
   } else if(state.coachTab==='dailytasks'){
     if(dailyTasksCache.length===0 && state.players.length>0){ refreshDailyTasks(); }
+    if(!state.dailyTasksSelectedDate) state.dailyTasksSelectedDate = todayStr();
+    const selectedDate = state.dailyTasksSelectedDate;
+    const isToday = selectedDate === todayStr();
     const requiredItems = state.config.items.filter(it=>it.required);
     const allPending = [];
     dailyTasksCache.forEach(pl=>{ (pl.pending||[]).forEach(entry=>allPending.push({player:pl, entry})); });
     const pendingSection = allPending.length ? `
     <div class="panel" style="background:rgba(255,209,102,0.12);border-color:var(--accent-light);margin-bottom:14px;">
       <h2 style="font-size:16px;">📎 待審核（需要上傳證明的項目，${allPending.length}筆）</h2>
-      <div class="small-note" style="margin-bottom:8px;">這些是學生勾選了需要上傳影片/照片證明的項目，確認他們真的有附上證明後再通過；沒附證明或造假請按不通過，會扣點；如果是重複上傳的話可以直接省略，不影響點數。</div>
+      <div class="small-note" style="margin-bottom:8px;">這些是學生勾選了需要上傳影片/照片證明的項目，確認他們真的有附上證明後再通過；沒附證明或造假請按不通過，會扣點；如果是重複上傳的話可以直接省略，不影響點數。<b style="color:var(--accent-light);">這裡會列出「所有還沒處理」的紀錄，不限於今天，忘記審核也不會不見，隨時回來都找得到。</b></div>
       ${allPending.map(({player,entry})=>`
         <div class="item-row" style="cursor:default;flex-wrap:wrap;">
           <span style="min-width:80px;">${esc(player.realName||player.name)}（${esc(player.name)}）</span>
@@ -5842,12 +5862,13 @@ function renderCoachRole(){
     </div>` : '';
     const rows = dailyTasksCache.map(pl=>{
       const ch = characterById(pl.avatarId);
-      const doneCount = requiredItems.filter(it=>pl.doneToday.has(it.name)).length;
+      const doneOnDate = doneNamesFromLog(pl.log, selectedDate);
+      const doneCount = requiredItems.filter(it=>doneOnDate.has(it.name)).length;
       const allDone = requiredItems.length>0 && doneCount===requiredItems.length;
       return `<tr>
         <td><img src="${ch.image}" style="width:26px;height:26px;image-rendering:pixelated;border-radius:5px;" title="${esc(ch.name)}"></td>
         <td>${esc(pl.realName||pl.name)}<div class="small-note">${esc(pl.name)}</div></td>
-        ${requiredItems.map(it=>`<td style="text-align:center;font-size:16px;">${pl.doneToday.has(it.name)?'✅':'⬜'}</td>`).join('')}
+        ${requiredItems.map(it=>`<td style="text-align:center;font-size:16px;">${doneOnDate.has(it.name)?'✅':'⬜'}</td>`).join('')}
         <td style="text-align:center;">${allDone?'<span style="color:var(--accent-green);">🎉 全部完成</span>':`<span class="small-note">${doneCount}/${requiredItems.length}</span>`}</td>
         <td>${(pl.pending||[]).length ? `<button class="btn secondary small" style="color:var(--accent-light);" onclick="viewPlayerLog('${esc(pl.name)}')">📎 ${pl.pending.length}筆待審核</button>` : ''}</td>
         <td><button class="btn secondary small" onclick="openJournalDetail('${esc(pl.name)}')">📔 訓練日誌</button></td>
@@ -5855,9 +5876,16 @@ function renderCoachRole(){
     }).join('');
     body = `
     ${pendingSection}
-    <div class="flex-between" style="margin-bottom:10px;">
-      <div class="small-note">今天（${todayStr()}）每位選手的每日必做項目完成狀況；點「📔 訓練日誌」另開視窗看該選手的目標與日誌內容，可以直接回覆。</div>
-      <button class="btn secondary small" onclick="dailyTasksCache=[];refreshDailyTasks();">🔄 重新整理</button>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <div class="flex-between" style="flex-wrap:wrap;gap:8px;">
+        <div>
+          <label style="margin-bottom:4px;">📅 查看哪一天的完成狀況</label>
+          <input type="date" value="${esc(selectedDate)}" max="${todayStr()}" onchange="state.dailyTasksSelectedDate=this.value;render();" style="width:auto;">
+          ${!isToday ? `<button class="btn secondary small" style="margin-left:8px;" onclick="state.dailyTasksSelectedDate=todayStr();render();">回到今天</button>` : ''}
+        </div>
+        <button class="btn secondary small" onclick="dailyTasksCache=[];refreshDailyTasks();">🔄 重新整理</button>
+      </div>
+      <div class="small-note" style="margin-top:8px;">${isToday?'目前顯示今天':'目前顯示 '+esc(selectedDate)}的每日必做項目完成狀況，可以隨時切換日期回顧之前的紀錄；點「📔 訓練日誌」另開視窗看該選手的目標與日誌內容，可以直接回覆。</div>
     </div>
     ${requiredItems.length ? `
     <table><thead><tr><th>角色</th><th>選手</th>${requiredItems.map(it=>`<th>${esc(it.name)}</th>`).join('')}<th>完成度</th><th>待審核</th><th>訓練日誌</th></tr></thead>
