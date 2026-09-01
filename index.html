@@ -3624,6 +3624,10 @@ async function reviewLog(name, index, decision){
     entry.reviewStatus = 'approved';
     await savePlayer(p);
     showToast('已通過審核');
+  } else if(decision==='skip'){
+    entry.reviewStatus = 'skipped';
+    await savePlayer(p);
+    showToast('已省略這筆（不影響點數），常見於重複上傳的情況');
   } else {
     const penalty = state.config.penaltyPoints!=null ? state.config.penaltyPoints : 30;
     p.points = Math.max(0, p.points-penalty);
@@ -4769,9 +4773,12 @@ function renderPlayerLogModal(){
           <span style="color:var(--accent-light);">⏳ 待審核</span>
           <button class="btn small" style="background:var(--accent-green);" onclick="reviewLog('${esc(p.name)}',${i},'approve')">✅ 通過</button>
           <button class="btn small" style="background:var(--accent-red);" onclick="reviewLog('${esc(p.name)}',${i},'reject')">🚫 造假扣點</button>
+          <button class="btn secondary small" onclick="reviewLog('${esc(p.name)}',${i},'skip')" title="重複上傳等情況可以省略，不影響點數">⏭️ 省略</button>
         </div>`;
       } else if(l.reviewStatus==='approved'){
         statusCell = '<span style="color:var(--accent-green);">✅ 已通過</span>';
+      } else if(l.reviewStatus==='skipped'){
+        statusCell = '<span class="small-note">⏭️ 已省略（不計點數，常見於重複上傳）</span>';
       } else {
         statusCell = `<span style="color:var(--accent-red);">🚫 造假（扣${l.penalty||0}點）</span>`;
       }
@@ -5795,13 +5802,14 @@ function renderCoachRole(){
     const pendingSection = allPending.length ? `
     <div class="panel" style="background:rgba(255,209,102,0.12);border-color:var(--accent-light);margin-bottom:14px;">
       <h2 style="font-size:16px;">📎 待審核（需要上傳證明的項目，${allPending.length}筆）</h2>
-      <div class="small-note" style="margin-bottom:8px;">這些是學生勾選了需要上傳影片/照片證明的項目，確認他們真的有附上證明後再通過；沒附證明或造假請按不通過，會扣點。</div>
+      <div class="small-note" style="margin-bottom:8px;">這些是學生勾選了需要上傳影片/照片證明的項目，確認他們真的有附上證明後再通過；沒附證明或造假請按不通過，會扣點；如果是重複上傳的話可以直接省略，不影響點數。</div>
       ${allPending.map(({player,entry})=>`
         <div class="item-row" style="cursor:default;flex-wrap:wrap;">
           <span style="min-width:80px;">${esc(player.realName||player.name)}（${esc(player.name)}）</span>
           <span class="small-note">${esc(entry.date)} ・ ${entry.items.map(esc).join('、')}</span>
           <button class="btn gold small" onclick="reviewLog('${esc(player.name)}',${entry.index},'approve')">✅ 通過</button>
           <button class="btn secondary small" style="color:var(--accent-red);" onclick="reviewLog('${esc(player.name)}',${entry.index},'reject')">❌ 不通過（扣點）</button>
+          <button class="btn secondary small" onclick="reviewLog('${esc(player.name)}',${entry.index},'skip')" title="重複上傳等情況可以省略，不影響點數">⏭️ 省略</button>
           <button class="btn secondary small" onclick="viewPlayerLog('${esc(player.name)}')">🔍 查看完整紀錄</button>
         </div>`).join('')}
     </div>` : '';
