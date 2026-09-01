@@ -5350,6 +5350,10 @@ function renderPathModal(itemRows, logRows, allDoneToday, needsVideoSelected){
         ${needsVideoSelected ? `
         ${stepHeader(stepNum++, '上傳照片或影片證明')}
         <div class="small-note" style="margin-bottom:8px;">你勾選的項目裡有需要證明的（📎），先點下面按鈕去上傳：</div>
+        <div class="small-note" style="margin-bottom:10px;padding:8px 10px;background:var(--bg-panel-2);border-radius:8px;color:var(--accent-light);">
+          ⚠️ 影片請控制在 <b>20 秒以內</b>，太長可能會上傳失敗。<br>
+          如果真的上傳不了，改用 LINE 或通訊軟體直接傳給教練就可以囉！
+        </div>
         ${state.config.formUrl ? `
         <a href="${esc(state.config.formUrl)}" target="_blank" rel="noopener" class="btn secondary" style="display:inline-block;margin-bottom:12px;text-decoration:none;">📎 點我去上傳照片／影片</a>
         ` : `<div class="small-note" style="margin-bottom:12px;color:var(--accent-red);">教練還沒有設定上傳連結，請直接找教練詢問怎麼上傳。</div>`}
@@ -5357,7 +5361,7 @@ function renderPathModal(itemRows, logRows, allDoneToday, needsVideoSelected){
         ${stepHeader(stepNum++, '上傳完成後，回來打勾')}
         <div class="item-row" onclick="toggleVideoUploaded()">
           <input type="checkbox" ${state.videoUploadedDraft?'checked':''} onclick="event.stopPropagation()" onchange="toggleVideoUploaded()">
-          <span>我已經上傳今天的證明（作業／影片）</span>
+          <span>我已經上傳今天的證明（作業／影片，或已用通訊軟體傳給教練）</span>
         </div>
         ` : ''}
 
