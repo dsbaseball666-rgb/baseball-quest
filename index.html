@@ -5072,6 +5072,7 @@ function renderPlayerRole(){
       ${subHtml}
     </div>`;
   }).join('');
+  const needsVideoSelected = state.config.items.some(it=>checklistDraft[it.id] && it.requireVideo && !doneToday.has(it.name));
 
   let logRows = p.log.slice(0,5).map(l=>{
     let statusLine = '';
@@ -5323,30 +5324,45 @@ function renderPlayerRole(){
       ${shopTile}
     </div>
     ${state.showShopModal ? renderShopModal(shopRows) : ''}
-    ${state.showPathModal ? renderPathModal(itemRows, logRows, allDoneToday) : ''}
+    ${state.showPathModal ? renderPathModal(itemRows, logRows, allDoneToday, needsVideoSelected) : ''}
   </div>
 
   ${renderExamScoreBars(p)}
   ${renderFitnessBars(p)}`;
 }
 
-function renderPathModal(itemRows, logRows, allDoneToday){
+function stepHeader(num, title){
+  return `<div style="display:flex;align-items:center;gap:8px;margin:16px 0 8px;">
+    <div style="width:26px;height:26px;border-radius:50%;background:var(--accent-light);color:#3a2400;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${num}</div>
+    <div style="font-weight:700;font-size:14px;">${title}</div>
+  </div>`;
+}
+function renderPathModal(itemRows, logRows, allDoneToday, needsVideoSelected){
+  let stepNum = 1;
   return `
   <div class="modal-bg" onclick="if(event.target===this){state.showPathModal=false;render();}">
     <div class="modal" style="max-width:480px;max-height:88vh;overflow-y:auto;">
       <div class="flex-between"><h3 style="margin:0;">📋 修練之路</h3><button class="btn secondary small" onclick="state.showPathModal=false;render();">✕ 關閉</button></div>
       ${allDoneToday ? '<div class="small-note" style="margin-top:10px;">✅ 今天所有項目都完成囉，明天再來累積能量！</div>' : `
-        <div class="item-list" style="margin-top:10px;">${itemRows}</div>
+        ${stepHeader(stepNum++, '勾選你今天完成的項目')}
+        <div class="item-list">${itemRows}</div>
+
+        ${needsVideoSelected ? `
+        ${stepHeader(stepNum++, '上傳照片或影片證明')}
+        <div class="small-note" style="margin-bottom:8px;">你勾選的項目裡有需要證明的（📎），先點下面按鈕去上傳：</div>
         ${state.config.formUrl ? `
-        <div class="small-note" style="margin-bottom:8px;">若有需要上傳照片／影片證明的項目，請先到這裡上傳：</div>
-        <a href="${esc(state.config.formUrl)}" target="_blank" rel="noopener" class="btn secondary" style="display:inline-block;margin-bottom:12px;text-decoration:none;">📎 前往上傳證明</a>
-        ` : `<div class="small-note" style="margin-bottom:8px;">教練尚未設定上傳表單</div>`}
+        <a href="${esc(state.config.formUrl)}" target="_blank" rel="noopener" class="btn secondary" style="display:inline-block;margin-bottom:12px;text-decoration:none;">📎 點我去上傳照片／影片</a>
+        ` : `<div class="small-note" style="margin-bottom:12px;color:var(--accent-red);">教練還沒有設定上傳連結，請直接找教練詢問怎麼上傳。</div>`}
+
+        ${stepHeader(stepNum++, '上傳完成後，回來打勾')}
         <div class="item-row" onclick="toggleVideoUploaded()">
           <input type="checkbox" ${state.videoUploadedDraft?'checked':''} onclick="event.stopPropagation()" onchange="toggleVideoUploaded()">
           <span>我已經上傳今天的證明（作業／影片）</span>
         </div>
-        <div style="height:12px;"></div>
-        <button class="btn gold" onclick="submitPractice()">紀錄這次練習</button>
+        ` : ''}
+
+        ${stepHeader(stepNum++, '按下面的按鈕送出')}
+        <button class="btn gold" style="width:100%;padding:12px;font-size:15px;" onclick="submitPractice()">✅ 紀錄這次練習</button>
         <div class="small-note" style="margin-top:8px;">同一天可以分次記錄不同的訓練項目，已完成的項目會標示 ✅，不會重複計算能量。</div>
       `}
       <h3 style="margin-top:20px;font-size:16px;">📜 最近紀錄</h3>
