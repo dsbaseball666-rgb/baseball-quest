@@ -5131,8 +5131,9 @@ function renderPlayerRole(){
   let logRows = p.log.slice(0,5).map(l=>{
     let statusLine = '';
     if(l.needsReview){
-      if(l.reviewStatus==='pending') statusLine = ' · <span style="color:var(--accent-light);">⏳ 待教練審核</span>';
+      if(l.reviewStatus==='pending') statusLine = ' · <span style="color:var(--accent-light);">⏳ 已送出，待教練審核</span>';
       else if(l.reviewStatus==='approved') statusLine = ' · <span style="color:var(--accent-green);">✅ 已通過審核</span>';
+      else if(l.reviewStatus==='skipped') statusLine = ' · <span class="small-note">⏭️ 教練已省略處理</span>';
       else if(l.reviewStatus==='rejected') statusLine = ` · <span style="color:var(--accent-red);">🚫 判定造假，已扣 ${l.penalty||0} 點</span>`;
     } else if(l.video===true){
       statusLine = ' · <span style="color:var(--accent-green);">✅ 已上傳證明</span>';
@@ -5267,6 +5268,32 @@ function renderPlayerRole(){
         <button class="btn secondary small" onclick="toggleItem('training_log')">前往填寫 →</button>
       </div>
     </div>`;
+  })()}
+  ${(()=>{
+    const pendingLogs = (p.log||[]).filter(l=>l.needsReview && l.reviewStatus==='pending');
+    const recentReviewed = (p.log||[]).filter(l=>l.needsReview && l.reviewStatus && l.reviewStatus!=='pending').slice(0,1);
+    if(pendingLogs.length){
+      return `<div class="panel" style="background:rgba(255,209,102,0.14);border-color:var(--accent-light);margin-top:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:22px;">⏳</div>
+          <div style="flex:1;min-width:180px;font-size:13px;color:var(--text-chalk);">
+            你有 <b style="color:var(--accent-light);">${pendingLogs.length}</b> 筆練習紀錄<b>已經成功送出</b>，正在等教練審核中：
+            <div style="margin-top:4px;">${pendingLogs.map(l=>`<div class="small-note">📅 ${esc(l.date)} ・ ${esc(logItemsDisplay(l))}</div>`).join('')}</div>
+          </div>
+        </div>
+      </div>`;
+    } else if(recentReviewed.length){
+      const l = recentReviewed[0];
+      const isApproved = l.reviewStatus==='approved';
+      const isSkipped = l.reviewStatus==='skipped';
+      return `<div class="panel" style="background:${isApproved?'rgba(76,175,80,0.12)':(isSkipped?'var(--bg-panel-2)':'rgba(228,87,46,0.12)')};border-color:${isApproved?'var(--accent-green)':(isSkipped?'var(--line)':'var(--accent-red)')};margin-top:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:20px;">${isApproved?'✅':(isSkipped?'⏭️':'🚫')}</div>
+          <div style="flex:1;font-size:13px;color:var(--text-chalk);">${esc(l.date)} 的「${esc(logItemsDisplay(l))}」${isApproved?'教練已經審核通過囉！':(isSkipped?'教練已處理（不列入點數計算）':'教練判定沒有附證明，已扣'+(l.penalty||0)+'點')}</div>
+        </div>
+      </div>`;
+    }
+    return '';
   })()}
   ${state.showAvatarPicker ? renderAvatarPickerModal() : ''}
   ${state.showJournalForm ? renderJournalFormModal() : ''}
