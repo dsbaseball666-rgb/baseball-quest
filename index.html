@@ -449,6 +449,8 @@ function buildDefaultConfig(){
     attackEnergyCost:1,
     playerMaxHp:100,
     bossAttackDamage:10,
+    bossBaseHp:500,
+    bossHpIncrement:300,
     ultimateDamage:100,
     bossRoster: DEFAULT_BOSS_ROSTER.slice(),
     spinPrizes: [
@@ -1033,6 +1035,8 @@ async function getConfig(){
     if(parsed.lastBackupDate===undefined) parsed.lastBackupDate = null;
     if(parsed.playerMaxHp==null) parsed.playerMaxHp = 100;
     if(parsed.bossAttackDamage==null) parsed.bossAttackDamage = 10;
+    if(parsed.bossBaseHp==null) parsed.bossBaseHp = 500;
+    if(parsed.bossHpIncrement==null) parsed.bossHpIncrement = 300;
     if(!parsed.spinPrizes) parsed.spinPrizes = buildDefaultConfig().spinPrizes;
     if(!parsed.event) parsed.event = buildDefaultConfig().event;
     if(!parsed.event.participants) parsed.event.participants = [];
@@ -1374,7 +1378,11 @@ function applyTplFields(boss, tpl){
   boss.image = tpl.image || null;
   boss.quote = tpl.quote;
 }
-function bossMaxHP(bossNumber){ return 500 + (bossNumber-1)*300; }
+function bossMaxHP(bossNumber){
+  const base = state.config.bossBaseHp!=null ? state.config.bossBaseHp : 500;
+  const inc = state.config.bossHpIncrement!=null ? state.config.bossHpIncrement : 300;
+  return base + (bossNumber-1)*inc;
+}
 
 const MONSTER_REACTIONS = {
   hit: { action:'怒吼', lines:['「唔啊！這一下有感覺...」','「你這傢伙，還挺有兩下子！」','「可惡，血條掉了一截！」','「哼，還沒完呢！」','「痛！但這只是開始！」'] },
@@ -1818,7 +1826,10 @@ let state = {
   showJournalDetail: null,
   journalDetailData: null,
   journalEntryReplyDraft: {},
-  addEventRewardDraft: {name:'', pointsValue:0, desc:''}
+  addEventRewardDraft: {name:'', pointsValue:0, desc:''},
+  eventBossHpDraft: {},
+  currentBossHpDraft: {},
+  dailyTasksSelectedDate: null
 };
 let subDraft = {}; // { itemId: { picks:{optionLabel:true}, custom:'' } }
 
@@ -2679,6 +2690,29 @@ async function updateHpSettings(field, raw){
   showToast('已更新設定');
   render();
 }
+async function updateBossHpFormula(field, raw){
+  const val = Number(raw);
+  if(isNaN(val) || val<0){ showToast('請輸入正確的數字'); return; }
+  if(field==='base') state.config.bossBaseHp = Math.round(val);
+  else if(field==='increment') state.config.bossHpIncrement = Math.round(val);
+  await saveConfig(state.config);
+  showToast('已更新血量成長公式（只影響之後打倒後出現的新 Boss，不會動到目前這隻）');
+  render();
+}
+async function coachSetCurrentBossHp(){
+  const d = state.currentBossHpDraft || {};
+  const boss = await getTeamBoss();
+  const newMax = d.maxHp!=null && d.maxHp!=='' ? Math.max(1, Math.round(Number(d.maxHp))) : boss.maxHp;
+  const newHp = d.hp!=null && d.hp!=='' ? Math.max(0, Math.min(newMax, Math.round(Number(d.hp)))) : Math.min(boss.hp, newMax);
+  if(isNaN(newMax) || isNaN(newHp)){ showToast('請輸入正確的數字'); return; }
+  boss.maxHp = newMax;
+  boss.hp = newHp;
+  await saveTeamBoss(boss);
+  state.teamBoss = boss;
+  state.currentBossHpDraft = {};
+  showToast('已調整目前 Boss 血量為 '+newHp+' / '+newMax);
+  render();
+}
 /* ---- 抽獎轉盤 ---- */
 function weightedRandomPrizeIndex(prizes){
   const total = prizes.reduce((s,p)=>s+(p.weight||0),0);
@@ -2807,6 +2841,21 @@ async function coachRefreshEventData(){
   eventParticipantsCache = [];
   await refreshEventParticipants();
   showToast('已重新整理活動資料');
+  render();
+}
+async function coachSetEventBossHp(){
+  const ev = state.config.event;
+  const d = state.eventBossHpDraft || {};
+  if((d.hp===undefined || d.hp==='') && (d.maxHp===undefined || d.maxHp==='')){
+    showToast('請至少填一個欄位');
+    return;
+  }
+  if(d.maxHp!==undefined && d.maxHp!==''){ ev.bossMaxHp = Math.max(1, Math.round(Number(d.maxHp))); }
+  if(d.hp!==undefined && d.hp!==''){ ev.bossHp = Math.round(Number(d.hp)); }
+  ev.bossHp = Math.max(0, Math.min(ev.bossMaxHp, ev.bossHp));
+  await saveConfig(state.config);
+  state.eventBossHpDraft = {};
+  showToast('活動 Boss 血量已更新為 '+ev.bossHp+'/'+ev.bossMaxHp);
   render();
 }
 async function coachSaveEventSetup(){
@@ -3791,6 +3840,48 @@ async function refreshPersonalTasks(){
   }
   personalTasksCache = all;
   render();
+}
+async function exportWeeklyRecord(){
+  showToast('正在整理一週紀錄，請稍候…');
+  try{
+    const names = await listPlayers();
+    const requiredItems = state.config.items.filter(it=>it.required);
+    const today = new Date();
+    const dates = [];
+    for(let i=6;i>=0;i--){
+      const d = new Date(today);
+      d.setDate(d.getDate()-i);
+      dates.push(d.toISOString().slice(0,10));
+    }
+    const header = ['暱稱／ID','本名', ...dates, '本週寫日誌天數', '本週完成率'];
+    const rows = [header];
+    for(const n of names){
+      const p = normalizePlayer(await getPlayer(n));
+      if(!p) continue;
+      let journalDays = 0;
+      let fullyDoneDays = 0;
+      const rowCells = dates.map(d=>{
+        const doneNames = doneNamesFromLog(p.log, d);
+        const doneCount = requiredItems.filter(it=>doneNames.has(it.name)).length;
+        const allDone = requiredItems.length>0 && doneCount===requiredItems.length;
+        if(allDone) fullyDoneDays++;
+        const hasJournal = (p.log||[]).some(l=>l.date===d && l.journal);
+        if(hasJournal) journalDays++;
+        if(!requiredItems.length) return doneNames.size>0 ? '✓' : '';
+        return doneCount+'/'+requiredItems.length+(allDone?' ✓':'');
+      });
+      const completionRate = requiredItems.length ? Math.round(fullyDoneDays/7*100)+'%' : '—';
+      rows.push([p.name, p.realName||'', ...rowCells, journalDays, completionRate]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:12},{wch:12}, ...dates.map(()=>({wch:10})), {wch:14}, {wch:12}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '一週完成紀錄');
+    XLSX.writeFile(wb, '一週筆記本完成紀錄_'+todayStr()+'.xlsx');
+    showToast('✔ 已下載一週完成紀錄！');
+  }catch(e){
+    showToast('匯出失敗：'+(e&&e.message?e.message:'未知錯誤'), 'err');
+  }
 }
 let dailyTasksCache = [];
 async function refreshDailyTasks(){
@@ -5592,6 +5683,7 @@ function renderCoachRole(){
       <div style="margin-top:12px;"><button class="btn gold" onclick="addShopItem()">新增商品</button></div>
     </div>`;
   } else if(state.coachTab==='bossroster'){
+    if(!state.teamBoss){ getTeamBoss().then(b=>{ state.teamBoss=b; render(); }); }
     const roster = state.config.bossRoster || DEFAULT_BOSS_ROSTER;
     let rows = roster.map(t=>`
       <tr><td>${t.image?`<img src="${t.image}" style="width:40px;height:40px;image-rendering:pixelated;">`:esc(t.emoji||'')}</td><td>${esc(t.name)}</td><td>${esc(t.quote||'')}</td><td><button class="btn secondary small" onclick="deleteBossTemplate('${t.id}')">刪除</button></td></tr>
@@ -5605,6 +5697,25 @@ function renderCoachRole(){
         <div><label>學生生命值上限</label><input type="number" value="${state.config.playerMaxHp!=null?state.config.playerMaxHp:100}" onchange="updateHpSettings('maxHp', this.value)"></div>
         <div><label>答錯一次扣血量</label><input type="number" value="${state.config.bossAttackDamage!=null?state.config.bossAttackDamage:10}" onchange="updateHpSettings('damage', this.value)"></div>
       </div>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">🐲 目前 Boss 血量</h2>
+      <div class="small-note" style="margin:6px 0 10px;">${state.teamBoss?('目前是「'+esc(state.teamBoss.name||'')+'」（第 '+(state.teamBoss.bossNumber||1)+' 隻），血量 '+state.teamBoss.hp+' / '+state.teamBoss.maxHp):'讀取中…'}</div>
+      <div class="row-flex">
+        <div><label>設定目前血量</label><input type="number" placeholder="${state.teamBoss?state.teamBoss.hp:''}" oninput="state.currentBossHpDraft=Object.assign({},state.currentBossHpDraft,{hp:this.value})"></div>
+        <div><label>設定血量上限</label><input type="number" placeholder="${state.teamBoss?state.teamBoss.maxHp:''}" oninput="state.currentBossHpDraft=Object.assign({},state.currentBossHpDraft,{maxHp:this.value})"></div>
+        <div style="flex:0;"><button class="btn gold" onclick="coachSetCurrentBossHp()">套用</button></div>
+      </div>
+      <div class="small-note" style="margin-top:8px;">只填其中一項也可以，沒填的欄位維持原本數值。</div>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <h2 style="font-size:16px;">📈 Boss 血量成長公式</h2>
+      <div class="small-note" style="margin:6px 0 10px;">全隊打倒目前 Boss 後，下一隻新 Boss 的血量上限，會用「基礎血量 + (第幾隻-1) × 每隻遞增血量」自動算出來。這裡調整只會影響<b>之後出現的新 Boss</b>，不會動到現在正在打的這隻（現在這隻請用上面「目前 Boss 血量」直接調整）。</div>
+      <div class="row-flex">
+        <div><label>第一隻 Boss 基礎血量</label><input type="number" value="${state.config.bossBaseHp!=null?state.config.bossBaseHp:500}" onchange="updateBossHpFormula('base', this.value)"></div>
+        <div><label>之後每隻遞增血量</label><input type="number" value="${state.config.bossHpIncrement!=null?state.config.bossHpIncrement:300}" onchange="updateBossHpFormula('increment', this.value)"></div>
+      </div>
+      <div class="small-note" style="margin-top:8px;">例如目前設定：第1隻 ${bossMaxHP(1)} 血、第2隻 ${bossMaxHP(2)} 血、第3隻 ${bossMaxHP(3)} 血…以此類推。</div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <div class="small-note" style="margin-bottom:8px;">如果下拉選單裡看不到新的怪物圖片，通常是因為你之前已經存過舊版名冊。按下面按鈕會把名冊整個換成最新的完整怪物圖鑑（40 隻，含圖片）。<b>目前戰鬥中的 Boss 血量／進度不會受影響</b>，但如果你自己手動新增過的怪物會被換掉，需要的話請重新加回來。</div>
@@ -5887,9 +5998,12 @@ function renderCoachRole(){
           <input type="date" value="${esc(selectedDate)}" max="${todayStr()}" onchange="state.dailyTasksSelectedDate=this.value;render();" style="width:auto;">
           ${!isToday ? `<button class="btn secondary small" style="margin-left:8px;" onclick="state.dailyTasksSelectedDate=todayStr();render();">回到今天</button>` : ''}
         </div>
-        <button class="btn secondary small" onclick="dailyTasksCache=[];refreshDailyTasks();">🔄 重新整理</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn gold small" onclick="exportWeeklyRecord()">📥 匯出一週紀錄</button>
+          <button class="btn secondary small" onclick="dailyTasksCache=[];refreshDailyTasks();">🔄 重新整理</button>
+        </div>
       </div>
-      <div class="small-note" style="margin-top:8px;">${isToday?'目前顯示今天':'目前顯示 '+esc(selectedDate)}的每日必做項目完成狀況，可以隨時切換日期回顧之前的紀錄；點「📔 訓練日誌」另開視窗看該選手的目標與日誌內容，可以直接回覆。</div>
+      <div class="small-note" style="margin-top:8px;">${isToday?'目前顯示今天':'目前顯示 '+esc(selectedDate)}的每日必做項目完成狀況，可以隨時切換日期回顧之前的紀錄；點「📔 訓練日誌」另開視窗看該選手的目標與日誌內容，可以直接回覆。「📥 匯出一週紀錄」會下載最近 7 天所有選手的完成狀況成 Excel 檔案，隨時可以匯出。</div>
     </div>
     ${requiredItems.length ? `
     <table><thead><tr><th>角色</th><th>選手</th>${requiredItems.map(it=>`<th>${esc(it.name)}</th>`).join('')}<th>完成度</th><th>待審核</th><th>訓練日誌</th></tr></thead>
@@ -6178,6 +6292,12 @@ function renderCoachRole(){
       <h2 style="font-size:16px;display:flex;align-items:center;gap:8px;">${ev.bossImage?`<img src="${ev.bossImage}" style="width:28px;height:28px;border-radius:6px;image-rendering:pixelated;">`:esc(ev.bossEmoji||'🔥')} Boss 血量：${ev.bossHp||0} / ${ev.bossMaxHp||0}</h2>
       <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
       ${ev.bossMaxHp>0 && ev.bossHp<=0 ? '<div class="small-note" style="margin-top:8px;color:var(--accent-green);">🎉 Boss 被擊敗了！記得到下面發放活動獎勵給參加的選手～</div>' : ''}
+      <div class="row-flex" style="margin-top:10px;">
+        <div><label>直接設定目前血量</label><input type="number" placeholder="${ev.bossHp||0}" value="${state.eventBossHpDraft&&state.eventBossHpDraft.hp!==undefined?state.eventBossHpDraft.hp:''}" oninput="state.eventBossHpDraft=Object.assign({},state.eventBossHpDraft,{hp:this.value})"></div>
+        <div><label>直接設定血量上限</label><input type="number" placeholder="${ev.bossMaxHp||0}" value="${state.eventBossHpDraft&&state.eventBossHpDraft.maxHp!==undefined?state.eventBossHpDraft.maxHp:''}" oninput="state.eventBossHpDraft=Object.assign({},state.eventBossHpDraft,{maxHp:this.value})"></div>
+        <div style="flex:0;"><button class="btn gold" onclick="coachSetEventBossHp()">套用</button></div>
+      </div>
+      <div class="small-note" style="margin-top:6px;">只填其中一項也可以，沒填的維持原本數值；套用不會影響活動的開始/結束狀態，隨時可以調整。</div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;">🎁 活動獎勵</h2>
