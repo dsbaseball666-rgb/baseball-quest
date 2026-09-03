@@ -2063,6 +2063,7 @@ function backToPicker(){
   state.showMotionCapture = null;
   state.currentPlayer = null;
   state.playerData = null;
+  state.recentQuestionIds = [];
   render();
   loadPlayerChips();
 }
@@ -2351,7 +2352,16 @@ function pickQuestion(){
       if(tagPool.length) pool = tagPool;
     }
   }
-  return pool[Math.floor(Math.random()*pool.length)];
+  // 避免同一次遊玩過程中一直重複抽到一樣的題目——篩選後的題庫常常很小，純隨機很容易一直抽到同幾題
+  if(!state.recentQuestionIds) state.recentQuestionIds = [];
+  const recentSet = new Set(state.recentQuestionIds);
+  let freshPool = pool.filter(q=>!recentSet.has(q.id));
+  if(!freshPool.length) freshPool = pool; // 這個題庫都問過一輪了，才允許重新開始重複
+  const chosen = freshPool[Math.floor(Math.random()*freshPool.length)];
+  state.recentQuestionIds.push(chosen.id);
+  const maxRecent = Math.max(1, pool.length - 1); // 記住「題庫大小減一」題，確保完整循環過一輪才會重複
+  if(state.recentQuestionIds.length > maxRecent) state.recentQuestionIds = state.recentQuestionIds.slice(-maxRecent);
+  return chosen;
 }
 
 function openAttack(){
