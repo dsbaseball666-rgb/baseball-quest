@@ -462,12 +462,12 @@ function buildDefaultConfig(){
       {id:'sp_6', name:'神秘小禮物', weight:5, pointsValue:0, color:'#3A8A8A'},
       {id:'sp_7', name:'100 點數', weight:2, pointsValue:100, color:'#E39C2A'}
     ],
-    dailyLoginReward: { points: 5, energy: 1 },
+    dailyLoginReward: { points: 5, energy: 1, spinTickets: 0 },
     loginStreakRewards: [
-      {id:'ls_3', days:3, points:15, energy:0, name:'連續登入3天'},
-      {id:'ls_7', days:7, points:40, energy:2, name:'連續登入一週'},
-      {id:'ls_14', days:14, points:90, energy:3, name:'連續登入兩週'},
-      {id:'ls_30', days:30, points:200, energy:5, name:'連續登入一個月'}
+      {id:'ls_3', days:3, points:15, energy:0, spinTickets:0, name:'連續登入3天'},
+      {id:'ls_7', days:7, points:40, energy:2, spinTickets:1, name:'連續登入一週'},
+      {id:'ls_14', days:14, points:90, energy:3, spinTickets:1, name:'連續登入兩週'},
+      {id:'ls_30', days:30, points:200, energy:5, spinTickets:2, name:'連續登入一個月'}
     ],
     event: {
       active:false, name:'', startTime:null,
@@ -1054,7 +1054,9 @@ async function getConfig(){
     if(!parsed.event.pendingSubmissions) parsed.event.pendingSubmissions = [];
     if(!parsed.event.rewards) parsed.event.rewards = [];
     if(!parsed.dailyLoginReward) parsed.dailyLoginReward = buildDefaultConfig().dailyLoginReward;
+    if(parsed.dailyLoginReward.spinTickets==null) parsed.dailyLoginReward.spinTickets = 0;
     if(!parsed.loginStreakRewards) parsed.loginStreakRewards = buildDefaultConfig().loginStreakRewards;
+    parsed.loginStreakRewards.forEach(m=>{ if(m.spinTickets==null) m.spinTickets = 0; });
     (parsed.items||[]).forEach(it=>{
       if(it.subOptions==null) it.subOptions = [];
       it.subOptions = it.subOptions.map(o=> typeof o==='string' ? {label:o, xp:5, points:0} : o);
@@ -1809,7 +1811,7 @@ let state = {
   eventDamageDraft: {},
   showEventLobby: false,
   showLoginReward: null,
-  addLoginMilestoneDraft: {days:'', points:0, energy:0, name:''},
+  addLoginMilestoneDraft: {days:'', points:0, energy:0, spinTickets:0, name:''},
   showMotionCapture: null,
   submissionEditDraft: {},
   videoUploadedDraft: false,
@@ -1926,14 +1928,16 @@ function applyLoginReward(p){
   const wasYesterday = p.lastLoginDate && daysBetween(p.lastLoginDate, today)===1;
   p.loginStreak = wasYesterday ? (p.loginStreak||0)+1 : 1;
   p.lastLoginDate = today;
-  const daily = state.config.dailyLoginReward || {points:5, energy:1};
+  const daily = state.config.dailyLoginReward || {points:5, energy:1, spinTickets:0};
   p.points += (daily.points||0);
   p.energy += (daily.energy||0);
-  const result = { dailyPoints: daily.points||0, dailyEnergy: daily.energy||0, streak: p.loginStreak, milestone: null };
+  if(daily.spinTickets) p.spinTickets = (p.spinTickets||0) + daily.spinTickets;
+  const result = { dailyPoints: daily.points||0, dailyEnergy: daily.energy||0, dailySpinTickets: daily.spinTickets||0, streak: p.loginStreak, milestone: null };
   const milestone = (state.config.loginStreakRewards||[]).find(m=>m.days===p.loginStreak);
   if(milestone && !(p.claimedLoginStreakMilestones||[]).includes(milestone.id)){
     p.points += (milestone.points||0);
     p.energy += (milestone.energy||0);
+    if(milestone.spinTickets) p.spinTickets = (p.spinTickets||0) + milestone.spinTickets;
     if(!p.claimedLoginStreakMilestones) p.claimedLoginStreakMilestones = [];
     p.claimedLoginStreakMilestones.push(milestone.id);
     result.milestone = milestone;
@@ -2856,10 +2860,10 @@ async function coachAddLoginStreakMilestone(){
   if(!d.name.trim()){ showToast('請輸入里程碑名稱'); return; }
   const id = 'ls_'+Date.now();
   if(!state.config.loginStreakRewards) state.config.loginStreakRewards = [];
-  state.config.loginStreakRewards.push({id, days:Math.round(Number(d.days)), points:Number(d.points)||0, energy:Number(d.energy)||0, name:d.name.trim()});
+  state.config.loginStreakRewards.push({id, days:Math.round(Number(d.days)), points:Number(d.points)||0, energy:Number(d.energy)||0, spinTickets:Number(d.spinTickets)||0, name:d.name.trim()});
   state.config.loginStreakRewards.sort((a,b)=>a.days-b.days);
   await saveConfig(state.config);
-  state.addLoginMilestoneDraft = {days:'', points:0, energy:0, name:''};
+  state.addLoginMilestoneDraft = {days:'', points:0, energy:0, spinTickets:0, name:''};
   showToast('已新增連續登入獎勵');
   render();
 }
@@ -4792,11 +4796,11 @@ function renderLoginRewardModal(){
       <h3 style="margin-top:6px;">每日登入獎勵！</h3>
       <div class="small-note" style="margin:8px 0;">歡迎回來，今天繼續加油！</div>
       <div class="panel" style="background:var(--bg-panel-2);text-align:left;">
-        <div style="font-size:14px;">✔ 每日登入：${r.dailyPoints?('+'+r.dailyPoints+' 點數 '):''}${r.dailyEnergy?('+'+r.dailyEnergy+' 能量'):''}</div>
+        <div style="font-size:14px;">✔ 每日登入：${r.dailyPoints?('+'+r.dailyPoints+' 點數 '):''}${r.dailyEnergy?('+'+r.dailyEnergy+' 能量 '):''}${r.dailySpinTickets?('+'+r.dailySpinTickets+' 🎟️抽獎券'):''}</div>
         <div style="font-size:14px;margin-top:6px;color:var(--accent-light);">🔥 連續登入 <b>${r.streak}</b> 天</div>
         ${r.milestone ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
           <div style="font-weight:700;color:var(--accent-green);">🏆 達成「${esc(r.milestone.name)}」里程碑！</div>
-          <div style="font-size:14px;margin-top:4px;">額外獎勵：${r.milestone.points?('+'+r.milestone.points+' 點數 '):''}${r.milestone.energy?('+'+r.milestone.energy+' 能量'):''}</div>
+          <div style="font-size:14px;margin-top:4px;">額外獎勵：${r.milestone.points?('+'+r.milestone.points+' 點數 '):''}${r.milestone.energy?('+'+r.milestone.energy+' 能量 '):''}${r.milestone.spinTickets?('+'+r.milestone.spinTickets+' 🎟️抽獎券'):''}</div>
         </div>` : ''}
       </div>
       <button class="btn gold" style="width:100%;margin-top:14px;padding:12px;" onclick="state.showLoginReward=null;render();">太棒了！</button>
@@ -6340,13 +6344,13 @@ function renderCoachRole(){
       </div>
     </div>`;
   } else if(state.coachTab==='loginreward'){
-    const dl = state.config.dailyLoginReward || {points:5, energy:1};
+    const dl = state.config.dailyLoginReward || {points:5, energy:1, spinTickets:0};
     const milestones = state.config.loginStreakRewards || [];
     const milestoneRows = milestones.map(m=>`
       <div class="item-row" style="cursor:default;flex-wrap:wrap;">
         <span style="min-width:100px;">🔥 連續 ${m.days} 天</span>
         <span>${esc(m.name)}</span>
-        <span class="xp-tag">${m.points?('+'+m.points+'點數 '):''}${m.energy?('+'+m.energy+'能量'):''}</span>
+        <span class="xp-tag">${m.points?('+'+m.points+'點數 '):''}${m.energy?('+'+m.energy+'能量 '):''}${m.spinTickets?('+'+m.spinTickets+' 🎟️抽獎券'):''}</span>
         <button class="btn secondary small" style="color:var(--accent-red);" onclick="coachDeleteLoginStreakMilestone('${m.id}')">刪除</button>
       </div>`).join('') || '<div class="empty">尚無連續登入獎勵</div>';
     body = `
@@ -6356,6 +6360,7 @@ function renderCoachRole(){
       <div class="row-flex">
         <div><label>每日登入點數</label><input type="number" value="${dl.points||0}" onchange="coachUpdateDailyLoginReward('points', this.value)"></div>
         <div><label>每日登入能量</label><input type="number" value="${dl.energy||0}" onchange="coachUpdateDailyLoginReward('energy', this.value)"></div>
+        <div><label>每日登入抽獎券 🎟️</label><input type="number" value="${dl.spinTickets||0}" onchange="coachUpdateDailyLoginReward('spinTickets', this.value)"></div>
       </div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
@@ -6367,6 +6372,7 @@ function renderCoachRole(){
         <div><label>里程碑名稱</label><input type="text" value="${esc(state.addLoginMilestoneDraft.name)}" oninput="state.addLoginMilestoneDraft.name=this.value" placeholder="例如：連續登入一週"></div>
         <div style="max-width:100px;"><label>額外點數</label><input type="number" value="${state.addLoginMilestoneDraft.points}" oninput="state.addLoginMilestoneDraft.points=this.value"></div>
         <div style="max-width:100px;"><label>額外能量</label><input type="number" value="${state.addLoginMilestoneDraft.energy}" oninput="state.addLoginMilestoneDraft.energy=this.value"></div>
+        <div style="max-width:120px;"><label>額外抽獎券 🎟️</label><input type="number" value="${state.addLoginMilestoneDraft.spinTickets}" oninput="state.addLoginMilestoneDraft.spinTickets=this.value"></div>
       </div>
       <div style="margin-top:12px;"><button class="btn gold" onclick="coachAddLoginStreakMilestone()">新增里程碑</button></div>
     </div>`;
