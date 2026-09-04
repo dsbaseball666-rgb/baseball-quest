@@ -2120,7 +2120,7 @@ async function finalizeSpecialItem(itemId, extra){
     date: today,
     items: [{ name: it.name, detail: (extra && extra.detail) || '' }],
     xp: r.energy, coins: r.points,
-    video: false, needsReview: false, reviewStatus: 'approved',
+    video: false, needsReview: true, reviewStatus: 'pending',
     journal: (extra && extra.journal) || null
   });
   p.log = trimPlayerLog(p.log, 20);
@@ -2201,7 +2201,7 @@ async function submitJournalForm(){
   state.showJournalForm = null;
   state.journalFormDraft = {};
   const r = await finalizeSpecialItem(itemId, {detail:'已線上填寫', journal});
-  if(r) showToast('訓練日誌已填寫完成！獲得 ⚡'+r.energy+' 能量、💰'+r.points+' 點數');
+  if(r) showToast('訓練日誌已填寫完成！獲得 ⚡'+r.energy+' 能量、💰'+r.points+' 點數，等待教練審核');
   render();
 }
 function cancelJournalForm(){
@@ -2303,8 +2303,8 @@ async function submitPractice(){
   });
   p.log.unshift({
     date:today, items:itemsForLog, xp:rewards.energy, coins:rewards.points,
-    video:videoDone, needsReview:needsVideo,
-    reviewStatus: needsVideo ? 'pending' : 'approved',
+    video:videoDone, needsReview:true,
+    reviewStatus: 'pending',
     journal: logJournal
   });
   p.log = trimPlayerLog(p.log, 20);
@@ -2313,7 +2313,7 @@ async function submitPractice(){
   subDraft = {};
   journalDraft = {};
   state.videoUploadedDraft = false;
-  showToast('練習已記錄！獲得 ⚡'+rewards.energy+' 能量、💰'+rewards.points+' 點數'+(needsVideo?'，等待教練審核':''));
+  showToast('練習已記錄！獲得 ⚡'+rewards.energy+' 能量、💰'+rewards.points+' 點數，等待教練審核');
   render();
 }
 
