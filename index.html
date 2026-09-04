@@ -1053,6 +1053,7 @@ async function getConfig(){
     if(parsed.event.plankDamagePerSec==null) parsed.event.plankDamagePerSec = 1;
     if(!parsed.event.pendingSubmissions) parsed.event.pendingSubmissions = [];
     if(!parsed.event.rewards) parsed.event.rewards = [];
+    parsed.event.rewards.forEach(r=>{ if(r.spinTickets==null) r.spinTickets = 0; });
     if(!parsed.dailyLoginReward) parsed.dailyLoginReward = buildDefaultConfig().dailyLoginReward;
     if(parsed.dailyLoginReward.spinTickets==null) parsed.dailyLoginReward.spinTickets = 0;
     if(!parsed.loginStreakRewards) parsed.loginStreakRewards = buildDefaultConfig().loginStreakRewards;
@@ -1848,7 +1849,7 @@ let state = {
   showJournalDetail: null,
   journalDetailData: null,
   journalEntryReplyDraft: {},
-  addEventRewardDraft: {name:'', pointsValue:0, desc:''},
+  addEventRewardDraft: {name:'', pointsValue:0, spinTickets:0, desc:''},
   eventBossHpDraft: {},
   currentBossHpDraft: {},
   dailyTasksSelectedDate: null
@@ -3302,9 +3303,9 @@ async function coachAddEventReward(){
   if(!d.name.trim()){ showToast('請輸入獎勵名稱'); return; }
   const id = 'er_'+Date.now();
   if(!state.config.event.rewards) state.config.event.rewards = [];
-  state.config.event.rewards.push({id, name:d.name.trim(), pointsValue:Number(d.pointsValue)||0, desc:(d.desc||'').trim()});
+  state.config.event.rewards.push({id, name:d.name.trim(), pointsValue:Number(d.pointsValue)||0, spinTickets:Number(d.spinTickets)||0, desc:(d.desc||'').trim()});
   await saveConfig(state.config);
-  state.addEventRewardDraft = {name:'', pointsValue:0, desc:''};
+  state.addEventRewardDraft = {name:'', pointsValue:0, spinTickets:0, desc:''};
   showToast('已新增活動獎勵');
   render();
 }
@@ -3328,6 +3329,7 @@ async function coachGrantEventReward(rewardId, target){
       const p = await getPlayer(name);
       if(!p) continue;
       if(reward.pointsValue) p.points += reward.pointsValue;
+      if(reward.spinTickets) p.spinTickets = (p.spinTickets||0) + reward.spinTickets;
       if(!p.inventory) p.inventory = [];
       p.inventory.push({
         id: 'inv_'+Date.now()+'_'+name,
@@ -4766,6 +4768,13 @@ function renderEventLobbyModal(){
         <div class="hp-bar-outer" style="max-width:280px;"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
         <div class="small-note">HP ${ev.bossHp||0} / ${ev.bossMaxHp||0}</div>
       </div>
+      ${(ev.rewards||[]).length ? `
+      <div class="panel" style="background:var(--bg-panel-2);margin-top:10px;">
+        <div class="small-note" style="margin-bottom:6px;text-align:left;">🎁 這次活動的獎品：</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${ev.rewards.map(r=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-deep);border-radius:12px;padding:4px 10px;font-size:12px;">🎁 ${esc(r.name)}${r.pointsValue?(' +'+r.pointsValue+'點'):''}${r.spinTickets?(' +'+r.spinTickets+'🎟️'):''}</span>`).join('')}
+        </div>
+      </div>` : ''}
       <h3 style="font-size:14px;margin-top:14px;">👥 參加隊員血量</h3>
       ${rows}
       ${(ev.participants||[]).includes(p.name) ? `
@@ -5245,12 +5254,21 @@ function renderPlayerRole(){
       const ev = state.config.event;
       if(!ev || !ev.name || !ev.startTime) return '';
       const startLocal = new Date(ev.startTime).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      const rewards = ev.rewards || [];
+      const rewardsPreview = rewards.length ? `
+        <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);">
+          <div class="small-note" style="margin-bottom:4px;">🎁 這次活動的獎品：</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${rewards.map(r=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-panel-2);border-radius:12px;padding:4px 10px;font-size:12px;">🎁 ${esc(r.name)}${r.pointsValue?(' +'+r.pointsValue+'點'):''}${r.spinTickets?(' +'+r.spinTickets+'🎟️'):''}</span>`).join('')}
+          </div>
+        </div>` : '';
       if(ev.active){
         return `<div class="panel" style="background:rgba(42,157,143,0.15);border-color:var(--accent-green);padding:10px 16px;">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:22px;">🎪</div>
             <div style="font-size:13px;"><b style="color:var(--accent-green);">🟢 活動進行中：</b>「${esc(ev.name)}」${ev.bossName?('・ Boss：'+esc(ev.bossName)):''}</div>
           </div>
+          ${rewardsPreview}
         </div>`;
       }
       const isPast = new Date(ev.startTime).getTime() < Date.now();
@@ -5260,6 +5278,7 @@ function renderPlayerRole(){
           <div style="font-size:22px;">📅</div>
           <div style="font-size:13px;">即將登場：「${esc(ev.name)}」・ ${esc(startLocal)}</div>
         </div>
+        ${rewardsPreview}
       </div>`;
     })()}
     <div class="panel">
@@ -6466,11 +6485,12 @@ function renderCoachRole(){
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;">🎁 活動獎勵</h2>
-      <div class="small-note" style="margin-bottom:8px;">打倒 Boss 或活動結束後，可以把獎勵發放給參加的選手，物品會直接出現在他們的物品欄，點數也會馬上入帳。</div>
+      <div class="small-note" style="margin-bottom:8px;">打倒 Boss 或活動結束後，可以把獎勵發放給參加的選手，物品會直接出現在他們的物品欄，點數／抽獎券也會馬上入帳。學生在大廳就能看到這裡設定的獎品內容。</div>
       ${(ev.rewards||[]).length ? (ev.rewards||[]).map(r=>`
         <div class="item-row" style="cursor:default;flex-wrap:wrap;">
           <span style="min-width:100px;">🎁 ${esc(r.name)}</span>
           ${r.pointsValue?`<span class="xp-tag">+${r.pointsValue} 點數</span>`:''}
+          ${r.spinTickets?`<span class="xp-tag">+${r.spinTickets} 🎟️抽獎券</span>`:''}
           ${r.desc?`<span class="small-note">${esc(r.desc)}</span>`:''}
           <button class="btn gold small" onclick="coachGrantEventReward('${r.id}','all')">🎁 發放給全部參加者</button>
           <button class="btn secondary small" style="color:var(--accent-red);" onclick="coachDeleteEventReward('${r.id}')">刪除</button>
@@ -6478,6 +6498,7 @@ function renderCoachRole(){
       <div class="row-flex" style="margin-top:12px;">
         <div><label>獎勵名稱</label><input type="text" value="${esc(state.addEventRewardDraft.name)}" oninput="state.addEventRewardDraft.name=this.value" placeholder="例如：活動限定小獎品"></div>
         <div style="max-width:110px;"><label>附贈點數</label><input type="number" value="${state.addEventRewardDraft.pointsValue}" oninput="state.addEventRewardDraft.pointsValue=this.value"></div>
+        <div style="max-width:120px;"><label>附贈抽獎券 🎟️</label><input type="number" value="${state.addEventRewardDraft.spinTickets}" oninput="state.addEventRewardDraft.spinTickets=this.value"></div>
       </div>
       <div style="margin-top:8px;"><label>備註（選填）</label><input type="text" value="${esc(state.addEventRewardDraft.desc)}" oninput="state.addEventRewardDraft.desc=this.value" placeholder="例如：打倒 Boss 的紀念獎品"></div>
       <div style="margin-top:12px;"><button class="btn secondary" onclick="coachAddEventReward()">新增活動獎勵</button></div>
