@@ -2526,9 +2526,14 @@ function cancelEditItem(){
   render();
 }
 async function deleteItem(id){
-  state.config.items = state.config.items.filter(i=>i.id!==id);
-  await saveConfig(state.config);
-  render();
+  const it = state.config.items.find(i=>i.id===id);
+  const label = it ? it.name : '這個項目';
+  askConfirm('確定要刪除「'+label+'」嗎？'+(id==='training_log'?'這是訓練日誌項目，刪除後學生介面的「我的筆記本」會跟著消失，需要再手動加回來。':'')+'這個動作無法復原！', async ()=>{
+    state.config.items = state.config.items.filter(i=>i.id!==id);
+    await saveConfig(state.config);
+    showToast('已刪除「'+label+'」');
+    render();
+  });
 }
 async function addSubOption(itemId){
   const draft = state.subOptionDraft[itemId] || {label:'', xp:5, points:0};
