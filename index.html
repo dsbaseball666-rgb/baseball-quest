@@ -6630,6 +6630,37 @@ function renderCoachRole(){
       <div class="small-note" style="margin-top:6px;">只填其中一項也可以，沒填的維持原本數值；套用不會影響活動的開始/結束狀態，隨時可以調整。</div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <div class="flex-between"><h2 style="font-size:16px;margin:0;">🏆 目前排名（依累積對Boss傷害）</h2><button class="btn secondary small" onclick="coachRefreshEventData()">🔄 重新整理</button></div>
+      <div class="small-note" style="margin:6px 0 8px;">排名依每位選手所有回合累積的「對Boss傷害」排序，方便直接對表現好的選手發放獎勵。</div>
+      ${(()=>{
+        const rankTotals = {};
+        (ev.participants||[]).forEach(name=>{ rankTotals[name] = {name, dmgToBoss:0, entries:0}; });
+        (ev.log||[]).forEach(l=>{
+          if(!rankTotals[l.name]) rankTotals[l.name] = {name:l.name, dmgToBoss:0, entries:0};
+          rankTotals[l.name].dmgToBoss += (l.dmgToBoss||0);
+          rankTotals[l.name].entries += 1;
+        });
+        const ranking = Object.values(rankTotals).sort((a,b)=>b.dmgToBoss-a.dmgToBoss);
+        if(!ranking.length) return '<div class="empty">目前還沒有任何傷害紀錄</div>';
+        return ranking.map((r,i)=>{
+          const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
+          const hp = hpByName[r.name];
+          return `<div class="item-row" style="cursor:default;flex-wrap:wrap;">
+            <span style="font-family:var(--font-display);font-size:15px;width:26px;flex-shrink:0;">${medal}</span>
+            <span style="min-width:90px;">${esc(r.name)}</span>
+            <span class="xp-tag">⚔️ 累積傷害 ${r.dmgToBoss}</span>
+            <span class="small-note">${r.entries}筆紀錄${hp!=null?(' ・ ❤️'+hp):''}</span>
+            ${(ev.rewards||[]).length ? `
+            <select style="width:130px;margin-left:auto;" onchange="state.eventDamageDraft['${esc(r.name)}']=Object.assign({},state.eventDamageDraft['${esc(r.name)}'],{rewardId:this.value})">
+              <option value="">選獎勵</option>${(ev.rewards||[]).map(rw=>`<option value="${rw.id}">🎁 ${esc(rw.name)}</option>`).join('')}
+            </select>
+            <button class="btn gold small" onclick="coachGrantEventReward((state.eventDamageDraft['${esc(r.name)}']||{}).rewardId,'${esc(r.name)}')">🎁 發放</button>
+            ` : ''}
+          </div>`;
+        }).join('');
+      })()}
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;">🎁 活動獎勵</h2>
       <div class="small-note" style="margin-bottom:8px;">打倒 Boss 或活動結束後，可以把獎勵發放給參加的選手，物品會直接出現在他們的物品欄，點數／抽獎券也會馬上入帳。學生在大廳就能看到這裡設定的獎品內容。</div>
       ${(ev.rewards||[]).length ? (ev.rewards||[]).map(r=>`
