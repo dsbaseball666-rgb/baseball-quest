@@ -1817,6 +1817,9 @@ let state = {
   eventDamageDraft: {},
   showEventLobby: false,
   showLoginReward: null,
+  showParentZone: false,
+  parentZoneSelectedPlayer: null,
+  parentZoneData: null,
   addLoginMilestoneDraft: {days:'', points:0, energy:0, spinTickets:0, name:''},
   showMotionCapture: null,
   submissionEditDraft: {},
@@ -1908,7 +1911,7 @@ async function loadPlayerChips(){
     const names = await listPlayers();
     const chips = await Promise.all(names.map(async n=>{
       const p = await getPlayer(n);
-      return { name:n, avatarId: p ? p.avatarId : null, level: p ? (p.level||1) : 1 };
+      return { name:n, avatarId: p ? p.avatarId : null, level: p ? (p.level||1) : 1, realName: p ? (p.realName||'') : '' };
     }));
     state.playerChips = chips;
     if(!state.currentPlayer) render();
@@ -4170,6 +4173,13 @@ function renderJournalDetailModal(){
 
 /* ============ 畫面渲染 ============ */
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function maskMiddleName(name){
+  if(!name) return name;
+  const chars = Array.from(name); // 用陣列展開避免中文字被錯誤切割
+  if(chars.length<=1) return name;
+  if(chars.length===2) return chars[0]+'○';
+  return chars[0]+'○'.repeat(chars.length-2)+chars[chars.length-1];
+}
 function monsterVisualHtml(boss, sizeClass){
   const px = sizeClass==='boss-emoji-small' ? 56 : 110;
   if(boss && boss.image){
@@ -4652,6 +4662,92 @@ function renderQuizInline(){
     ${resultLine}
     ${reactionHtml}`;
 }
+function renderParentZoneModal(){
+  const selected = state.parentZoneSelectedPlayer;
+  if(!selected){
+    const chips = state.playerChips || [];
+    const rows = chips.map(pc=>{
+      const ch = characterById(pc.avatarId);
+      const displayName = pc.realName ? maskMiddleName(pc.realName) : pc.name;
+      return `<div class="item-row" onclick="selectParentZonePlayer('${esc(pc.name)}')">
+        ${ch?`<img src="${ch.image}" style="width:28px;height:28px;image-rendering:pixelated;margin-right:6px;">`:''}
+        <span>${esc(displayName)}</span>
+        <span class="xp-tag" style="margin-left:auto;">Lv.${pc.level}</span>
+      </div>`;
+    }).join('') || '<div class="empty">還沒有任何球員資料</div>';
+    return `
+    <div class="modal-bg" onclick="if(event.target===this){closeParentZone();}">
+      <div class="modal" style="max-width:420px;max-height:80vh;overflow-y:auto;">
+        <div class="flex-between"><h3 style="margin:0;">👨‍👩‍👧 家長專區</h3><button class="btn secondary small" onclick="closeParentZone()">✕ 關閉</button></div>
+        <div class="small-note" style="margin:8px 0 12px;">選擇您孩子的角色，查看修練之路完成內容、每週進度跟體能檢測成績（姓名中間已用○遮蔽保護隱私）。</div>
+        ${rows}
+      </div>
+    </div>`;
+  }
+  const d = state.parentZoneData;
+  if(!d){
+    return `<div class="modal-bg" onclick="if(event.target===this){closeParentZone();}">
+      <div class="modal" style="max-width:460px;text-align:center;"><div class="small-note">載入中…</div></div>
+    </div>`;
+  }
+  const ch = characterById(d.avatarId);
+  const weekRows = d.weekProgress.map(w=>{
+    const allDone = d.requiredCount>0 && w.doneCount===d.requiredCount;
+    const label = w.date.slice(5);
+    return `<div style="text-align:center;flex:1;min-width:0;">
+      <div class="small-note" style="font-size:10px;">${label}</div>
+      <div style="font-size:18px;">${d.requiredCount>0?(allDone?'✅':(w.doneCount>0?'🔶':'⬜')):'-'}</div>
+      <div class="small-note" style="font-size:10px;">${d.requiredCount>0?(w.doneCount+'/'+d.requiredCount):''}</div>
+    </div>`;
+  }).join('');
+  const logRows = d.recentLogs.map(l=>{
+    const statusLabel = !l.needsReview ? '' :
+      l.reviewStatus==='approved' ? ' <span style="color:var(--accent-green);">✅ 已確認</span>' :
+      l.reviewStatus==='pending' ? ' <span style="color:var(--accent-light);">⏳ 待確認</span>' :
+      l.reviewStatus==='skipped' ? ' <span class="small-note">⏭️ 已處理</span>' :
+      ' <span style="color:var(--accent-red);">🚫 未通過</span>';
+    return `<div class="item-row" style="cursor:default;">
+      <span class="small-note" style="min-width:70px;">${esc(l.date)}</span>
+      <span style="font-size:13px;">${esc(l.items.map(it=>it.name).join('、'))}</span>
+      ${statusLabel}
+    </div>`;
+  }).join('') || '<div class="empty">尚無完成紀錄</div>';
+  const fitnessKeys = Object.keys(d.fitnessByItem);
+  const fitnessBlocks = fitnessKeys.map(k=>{
+    const records = d.fitnessByItem[k];
+    const latest = records[0];
+    return `<div style="background:var(--bg-panel-2);border-radius:10px;padding:10px;margin-top:6px;">
+      <div style="font-weight:600;font-size:13px;">${esc(k)}</div>
+      <div style="font-size:15px;color:var(--accent-light);margin-top:2px;">${esc(String(latest.value))} ${esc(latest.unit||'')}<span class="small-note" style="margin-left:6px;">（${esc(latest.date)}）</span></div>
+      ${records.length>1?`<div class="small-note" style="margin-top:4px;">歷史：${records.slice(1,4).map(r=>esc(String(r.value))+(r.unit?esc(r.unit):'')).join('、')}</div>`:''}
+    </div>`;
+  }).join('') || '<div class="empty">尚無體能檢測資料</div>';
+  return `
+  <div class="modal-bg" onclick="if(event.target===this){closeParentZone();}">
+    <div class="modal" style="max-width:460px;max-height:85vh;overflow-y:auto;">
+      <div class="flex-between">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <img src="${ch.image}" style="width:32px;height:32px;image-rendering:pixelated;border-radius:6px;">
+          <div>
+            <div style="font-weight:600;">${esc(maskMiddleName(d.realName)||d.name)}</div>
+            <div class="small-note">${esc(d.grade||'')} ・ Lv.${d.level}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn secondary small" onclick="state.parentZoneSelectedPlayer=null;state.parentZoneData=null;render();">← 換一位</button>
+          <button class="btn secondary small" onclick="closeParentZone()">✕ 關閉</button>
+        </div>
+      </div>
+      <h3 style="margin-top:14px;font-size:14px;">📅 本週修練進度</h3>
+      <div class="small-note" style="margin-bottom:6px;">✅全部完成／🔶部分完成／⬜尚未完成</div>
+      <div style="display:flex;gap:2px;background:var(--bg-panel-2);border-radius:10px;padding:8px 4px;">${weekRows}</div>
+      <h3 style="margin-top:16px;font-size:14px;">📋 修練之路完成內容（最近10筆）</h3>
+      ${logRows}
+      <h3 style="margin-top:16px;font-size:14px;">💪 體能檢測成績</h3>
+      ${fitnessBlocks}
+    </div>
+  </div>`;
+}
 function renderLobbyLeaderboardModal(){
   const rows = leaderboardCache.map((pl,i)=>{
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
@@ -4795,6 +4891,49 @@ function renderEventLobbyModal(){
   </div>`;
 }
 let eventParticipantsCache = [];
+function openParentZone(){
+  state.showParentZone = true;
+  state.parentZoneSelectedPlayer = null;
+  state.parentZoneData = null;
+  render();
+}
+function closeParentZone(){
+  state.showParentZone = false;
+  state.parentZoneSelectedPlayer = null;
+  state.parentZoneData = null;
+  render();
+}
+async function selectParentZonePlayer(name){
+  state.parentZoneSelectedPlayer = name;
+  state.parentZoneData = null;
+  render();
+  const p = normalizePlayer(await getPlayer(name));
+  if(!p){ render(); return; }
+  const requiredItems = state.config.items.filter(it=>it.required);
+  const days = [];
+  for(let i=6;i>=0;i--){
+    const d = new Date();
+    d.setDate(d.getDate()-i);
+    days.push(d.toISOString().slice(0,10));
+  }
+  const weekProgress = days.map(d=>{
+    const doneSet = doneNamesFromLog(p.log, d);
+    const doneCount = requiredItems.filter(it=>doneSet.has(it.name)).length;
+    return { date:d, doneCount, total: requiredItems.length };
+  });
+  const recentLogs = (p.log||[]).filter(l=>l.items && l.items.length).slice(0,10);
+  const fitnessByItem = {};
+  (p.fitnessTests||[]).forEach(t=>{
+    if(!fitnessByItem[t.item]) fitnessByItem[t.item] = [];
+    fitnessByItem[t.item].push(t);
+  });
+  Object.keys(fitnessByItem).forEach(k=>fitnessByItem[k].sort((a,b)=>b.date.localeCompare(a.date)));
+  state.parentZoneData = {
+    name: p.name, realName: p.realName||'', avatarId: p.avatarId, level: p.level, grade: p.grade||'',
+    weekProgress, recentLogs, fitnessByItem, requiredCount: requiredItems.length
+  };
+  render();
+}
 async function refreshEventParticipants(){
   const ev = state.config.event || {};
   const data = [];
@@ -5240,9 +5379,11 @@ function renderPlayerRole(){
     </div>
     ${state.showCreatePlayerModal ? renderCreatePlayerModal() : ''}
     ${state.showTeamRules ? renderTeamRulesModal() : ''}
-    ${state.showLobbyLeaderboard ? renderLobbyLeaderboardModal() : ''}`;
+    ${state.showLobbyLeaderboard ? renderLobbyLeaderboardModal() : ''}
+    ${state.showParentZone ? renderParentZoneModal() : ''}`;
     return `
     <div style="text-align:right;margin-bottom:-4px;display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn secondary small" onclick="openParentZone()" title="家長專區">👨‍👩‍👧 家長專區</button>
       <button class="btn secondary small" style="border-radius:50%;width:34px;height:34px;padding:0;font-size:16px;" onclick="openTutorial()" title="新手先發指南">❓</button>
     </div>
     ${state.showTutorial ? renderTutorialModal() : ''}
