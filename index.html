@@ -3857,7 +3857,7 @@ function npcPathCSS(i, walkName, faceName){
   return `@keyframes ${walkName}{${walkKF}} @keyframes ${faceName}{${faceKF}}`;
 }
 function anyLobbyModalOpen(){
-  return !!(state.showCreatePlayerModal || state.pendingPlayerUnlock || state.showTeamRules || state.showTutorial || state.showLobbyLeaderboard);
+  return !!(state.showCreatePlayerModal || state.pendingPlayerUnlock || state.showTeamRules || state.showTutorial || state.showLobbyLeaderboard || state.showParentZone);
 }
 function startNpcChat(){
   if(npcChatTimer) return;
@@ -4666,13 +4666,13 @@ function renderParentZoneModal(){
   const selected = state.parentZoneSelectedPlayer;
   if(!selected){
     const chips = state.playerChips || [];
-    const rows = chips.map(pc=>{
+    const cards = chips.map(pc=>{
       const ch = characterById(pc.avatarId);
       const displayName = pc.realName ? maskMiddleName(pc.realName) : pc.name;
-      return `<div class="item-row" onclick="selectParentZonePlayer('${esc(pc.name)}')">
-        ${ch?`<img src="${ch.image}" style="width:28px;height:28px;image-rendering:pixelated;margin-right:6px;">`:''}
-        <span>${esc(displayName)}</span>
-        <span class="xp-tag" style="margin-left:auto;">Lv.${pc.level}</span>
+      return `<div onclick="selectParentZonePlayer('${esc(pc.name)}')" style="cursor:pointer;text-align:center;padding:10px 6px;border-radius:10px;border:1px solid var(--line);background:var(--bg-panel-2);">
+        ${ch?`<img src="${ch.image}" style="width:34px;height:34px;image-rendering:pixelated;border-radius:6px;">`:''}
+        <div style="font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(displayName)}</div>
+        <div class="small-note" style="font-size:10px;">Lv.${pc.level}</div>
       </div>`;
     }).join('') || '<div class="empty">還沒有任何球員資料</div>';
     return `
@@ -4680,7 +4680,7 @@ function renderParentZoneModal(){
       <div class="modal" style="max-width:420px;max-height:80vh;overflow-y:auto;">
         <div class="flex-between"><h3 style="margin:0;">👨‍👩‍👧 家長專區</h3><button class="btn secondary small" onclick="closeParentZone()">✕ 關閉</button></div>
         <div class="small-note" style="margin:8px 0 12px;">選擇您孩子的角色，查看修練之路完成內容、每週進度跟體能檢測成績（姓名中間已用○遮蔽保護隱私）。</div>
-        ${rows}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">${cards}</div>
       </div>
     </div>`;
   }
