@@ -362,7 +362,16 @@ async function dbGet(key){
   return snap.data().value;
 }
 async function dbSet(key, value){
-  await fbDb.collection(FS_COLLECTION).doc(key).set({ value, updatedAt: Date.now() });
+  try{
+    await fbDb.collection(FS_COLLECTION).doc(key).set({ value, updatedAt: Date.now() });
+  }catch(e){
+    console.error('dbSet failed for key='+key, e);
+    const sizeMB = (value.length/1024/1024).toFixed(2);
+    if(typeof showToast==='function'){
+      showToast('⚠️ 存檔失敗！資料大小 '+sizeMB+'MB，可能超過容量上限或網路問題，剛剛的操作沒有真的存進去，請重新整理確認並再試一次');
+    }
+    throw e;
+  }
 }
 async function dbDelete(key){
   await fbDb.collection(FS_COLLECTION).doc(key).delete();
@@ -981,7 +990,13 @@ async function getConfig(){
     if(parsed.bossDodgeChance==null) parsed.bossDodgeChance = 0.2;
     if(parsed.attackEnergyCost==null) parsed.attackEnergyCost = 1;
     if(parsed.ultimateDamage==null) parsed.ultimateDamage = 100;
-    if(!parsed.bossRoster || !parsed.bossRoster.length) parsed.bossRoster = DEFAULT_BOSS_ROSTER.slice();
+    if(parsed.bossRoster && parsed.bossRoster.length){
+      // 舊資料還內嵌在 config 裡：搬到獨立文件，之後 config 就會瘦身，不會再一起擠爆容量上限
+      await saveBossRosterData(parsed.bossRoster);
+    } else {
+      const rosterData = await getBossRosterData();
+      parsed.bossRoster = (rosterData && rosterData.length) ? rosterData : DEFAULT_BOSS_ROSTER.slice();
+    }
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
     // 技能改成職業專屬：若還留著舊版「全職業共用」的預設技能，換成新的職業專屬技能組合，教練自己額外新增的技能不會被動到
     {
@@ -1186,8 +1201,28 @@ async function deleteTeamRuleEntry(id){
   await saveConfig(state.config);
   render();
 }
+async function getBossRosterData(){
+  try{
+    const value = await dbGet('bossRosterData');
+    return JSON.parse(value);
+  }catch(e){
+    return null; // 還沒有獨立存過（舊資料或全新帳號），呼叫端會 fallback
+  }
+}
+async function saveBossRosterData(roster){
+  await dbSet('bossRosterData', JSON.stringify(roster));
+}
 async function saveConfig(cfg){
-  await dbSet('config', JSON.stringify(cfg));
+  // 怪物圖鑑（含插畫圖片）資料量很大，獨立存放避免跟其他設定擠爆 Firestore 單一文件 1MB 的容量上限。
+  // 之前兩者共用一個文件，一旦逼近上限寫入會直接失敗，畫面卻顯示「已套用成功」，造成資料看似消失的假象。
+  if(cfg.bossRoster && cfg.bossRoster.length){
+    await saveBossRosterData(cfg.bossRoster);
+    const rest = {};
+    for(const k in cfg){ if(k!=='bossRoster') rest[k] = cfg[k]; }
+    await dbSet('config', JSON.stringify(rest));
+  } else {
+    await dbSet('config', JSON.stringify(cfg));
+  }
 }
 
 async function listPlayers(){
