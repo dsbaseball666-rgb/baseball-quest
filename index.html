@@ -3017,12 +3017,20 @@ async function coachStartEvent(){
   const ev = state.config.event;
   if(!ev.name){ showToast('請先設定活動內容'); return; }
   if(!ev.participants.length){ showToast('請至少加入一位參加的選手'); return; }
+  if(ev.active){ showToast('活動已經在進行中了，紀錄都還在，不會被清空'); return; }
   ev.active = true;
   ev.bossHp = ev.bossMaxHp;
-  ev.log = [];
   await saveConfig(state.config);
   showToast('🎪 活動已開始！參加的選手打開 App 就會看到活動大廳');
   render();
+}
+async function coachClearEventLog(){
+  askConfirm('確定要清空這場活動的所有傷害紀錄跟排名嗎？這個動作無法復原！（Boss血量、參加名單、獎勵設定不會被清掉）', async ()=>{
+    state.config.event.log = [];
+    await saveConfig(state.config);
+    showToast('已清空活動紀錄');
+    render();
+  });
 }
 async function coachEndEvent(){
   askConfirm('確定要結束這場活動嗎？活動大廳會關閉，Boss血量紀錄會保留在紀錄裡。', async ()=>{
@@ -6637,7 +6645,9 @@ function renderCoachRole(){
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn secondary" onclick="coachSaveEventSetup()">💾 儲存活動設定</button>
         ${ev.active ? `<button class="btn secondary" style="color:var(--accent-red);" onclick="coachEndEvent()">🛑 結束活動</button>` : `<button class="btn gold" onclick="coachStartEvent()">▶️ 開始活動</button>`}
+        <button class="btn secondary" style="color:var(--accent-red);" onclick="coachClearEventLog()">🗑️ 清空活動紀錄（重新開始排名）</button>
       </div>
+      <div class="small-note" style="margin-top:6px;">「開始活動」不會清空既有紀錄，重複點擊或重新整理都不會弄丟資料；只有明確按「清空活動紀錄」才會重置排名。</div>
       <div class="small-note" style="margin-top:10px;">目前設定：${esc(ev.name||'尚未設定')} ・ 開始時間 ${startLocal} ・ Boss：${esc(ev.bossName||'')}</div>
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
