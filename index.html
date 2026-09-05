@@ -4876,6 +4876,28 @@ function renderEventLobbyModal(){
           ${ev.rewards.map(r=>`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-deep);border-radius:12px;padding:4px 10px;font-size:12px;">🎁 ${esc(r.name)}${r.pointsValue?(' +'+r.pointsValue+'點'):''}${r.spinTickets?(' +'+r.spinTickets+'🎟️'):''}</span>`).join('')}
         </div>
       </div>` : ''}
+      ${(()=>{
+        const rankTotals = {};
+        (ev.participants||[]).forEach(name=>{ rankTotals[name] = {name, dmgToBoss:0}; });
+        (ev.log||[]).forEach(l=>{
+          if(!rankTotals[l.name]) rankTotals[l.name] = {name:l.name, dmgToBoss:0};
+          rankTotals[l.name].dmgToBoss += (l.dmgToBoss||0);
+        });
+        const ranking = Object.values(rankTotals).sort((a,b)=>b.dmgToBoss-a.dmgToBoss).filter(r=>r.dmgToBoss>0);
+        if(!ranking.length) return '';
+        return `<h3 style="font-size:14px;margin-top:14px;">🏆 目前排名</h3>
+        <div class="panel" style="background:var(--bg-panel-2);padding:10px;">
+          ${ranking.map((r,i)=>{
+            const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
+            const isMe = r.name===state.currentPlayer;
+            return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;${isMe?'color:var(--accent-light);':''}">
+              <span style="font-family:var(--font-display);font-size:14px;width:22px;flex-shrink:0;">${medal}</span>
+              <span style="flex:1;font-size:13px;">${esc(r.name)}${isMe?' (你)':''}</span>
+              <span class="small-note">⚔️ ${r.dmgToBoss}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      })()}
       <h3 style="font-size:14px;margin-top:14px;">👥 參加隊員血量</h3>
       ${rows}
       ${(ev.participants||[]).includes(p.name) ? `
