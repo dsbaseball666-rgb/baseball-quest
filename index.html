@@ -3341,6 +3341,17 @@ async function coachRejectSubmission(id){
   showToast('已忽略這筆偵測結果');
   render();
 }
+async function coachClearAllPendingSubmissions(){
+  const ev = state.config.event;
+  const count = (ev.pendingSubmissions||[]).length;
+  if(!count){ showToast('目前沒有待確認的項目'); return; }
+  askConfirm('確定要一次清空全部 '+count+' 筆待確認的動作偵測結果嗎？這些都不會套用傷害，這個動作無法復原！', async ()=>{
+    ev.pendingSubmissions = [];
+    await saveConfig(state.config);
+    showToast('已清空全部待確認項目');
+    render();
+  });
+}
 async function coachUpdateEventRate(field, raw){
   const val = Number(raw);
   if(isNaN(val)||val<0){ showToast('請輸入正確數字'); return; }
@@ -6757,8 +6768,8 @@ function renderCoachRole(){
     </div>
     ${(ev.pendingSubmissions||[]).length ? `
     <div class="panel" style="background:rgba(255,209,102,0.12);border-color:var(--accent-light);margin-bottom:14px;">
-      <h2 style="font-size:16px;">📋 待確認的動作偵測結果（${ev.pendingSubmissions.length}）</h2>
-      <div class="small-note" style="margin-bottom:8px;">目前是框架測試模式，數值是學生手動模擬的；可以直接確認套用，或先修改數字再套用。</div>
+      <div class="flex-between"><h2 style="font-size:16px;margin:0;">📋 待確認的動作偵測結果（${ev.pendingSubmissions.length}）</h2><button class="btn secondary small" onclick="coachClearAllPendingSubmissions()">🗑️ 全部清空</button></div>
+      <div class="small-note" style="margin-bottom:8px;">目前是框架測試模式，數值是學生手動模擬的；可以直接確認套用，或先修改數字再套用。${ev.pendingSubmissions.length>50?'<br><b style="color:var(--accent-red);">⚠️ 累積筆數偏多，建議盡快處理或按上面「全部清空」，避免持續累積。</b>':''}</div>
       ${ev.pendingSubmissions.map(sub=>{
         const rate = sub.type==='pushup' ? (ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3) : (ev.plankDamagePerSec!=null?ev.plankDamagePerSec:1);
         const editVal = state.submissionEditDraft[sub.id];
