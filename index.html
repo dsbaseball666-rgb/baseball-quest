@@ -3151,6 +3151,12 @@ function drawPoseSkeleton(canvas, video, keypoints){
     }
   });
 }
+function elbowAngle(kp, side){
+  // side: 'left' 或 'right'。回傳該側手肘的彎曲角度（肩-肘-腕），180度=完全伸直，角度越小彎越多
+  const shoulder = kp[side+'_shoulder'], elbow = kp[side+'_elbow'], wrist = kp[side+'_wrist'];
+  if(!shoulder || !elbow || !wrist || shoulder.score<0.3 || elbow.score<0.3 || wrist.score<0.3) return null;
+  return poseAngle(shoulder, elbow, wrist);
+}
 function processPushupFrame(keypoints, mc){
   const kp = keypointMap(keypoints);
   const ls=kp.left_shoulder, rs=kp.right_shoulder, lh=kp.left_hip, rh=kp.right_hip;
@@ -3162,11 +3168,26 @@ function processPushupFrame(keypoints, mc){
   const ps = mc.poseState;
   const deltaRatio = (shoulderY - ps.refY) / ps.baseline;
   const DOWN_THRESHOLD = 0.14, UP_THRESHOLD = 0.05;
+
+  // 手肘彎曲角度：雙重驗證，避免只靠身體上下位移就能誤判（例如晃鏡頭、蹲低但手臂沒真的彎）
+  // 左右手肘分數不一定同時可靠（側面拍攝常常一邊會被身體擋住），取信心分數較高、看得到的那一邊
+  const leftElbow = elbowAngle(kp,'left');
+  const rightElbow = elbowAngle(kp,'right');
+  const elbowAngleVal = (leftElbow!=null && rightElbow!=null) ? Math.min(leftElbow,rightElbow)
+    : (leftElbow!=null ? leftElbow : rightElbow);
+  const ELBOW_BENT = 110;   // 手肘角度小於這個值，視為真的彎曲（伏地挺身下降姿勢）
+  const ELBOW_STRAIGHT = 150; // 手肘角度大於這個值，視為真的伸直（伏地挺身起始姿勢）
+  mc.formOk = elbowAngleVal!=null ? (elbowAngleVal<ELBOW_BENT || elbowAngleVal>ELBOW_STRAIGHT) : null;
+
   if(ps.phase==='up'){
     ps.refY = ps.refY*0.9 + shoulderY*0.1; // 站姿基準緩慢跟隨微調，容忍鏡頭角度小幅飄移
-    if(deltaRatio > DOWN_THRESHOLD) ps.phase = 'down';
+    const bodyMovedDown = deltaRatio > DOWN_THRESHOLD;
+    const elbowBent = elbowAngleVal==null ? true : elbowAngleVal < ELBOW_BENT; // 偵測不到手肘時，退回只看身體位移，避免完全卡住
+    if(bodyMovedDown && elbowBent) ps.phase = 'down';
   } else if(ps.phase==='down'){
-    if(deltaRatio < UP_THRESHOLD){
+    const bodyMovedUp = deltaRatio < UP_THRESHOLD;
+    const elbowStraight = elbowAngleVal==null ? true : elbowAngleVal > ELBOW_STRAIGHT;
+    if(bodyMovedUp && elbowStraight){
       ps.phase = 'up';
       mc.value += 1;
       const el = document.getElementById('motion-counter-value');
@@ -3186,7 +3207,16 @@ function processPlankFrame(keypoints, mc){
   else if(lk && rk && lk.score>0.3 && rk.score>0.3) far = {x:(lk.x+rk.x)/2, y:(lk.y+rk.y)/2};
   if(!far) return;
   const angle = poseAngle(shoulder, hip, far);
-  const isStraight = Math.abs(180-angle) < 25;
+  const isStraightLine = Math.abs(180-angle) < 25;
+
+  // 光是「肩-髖-踝一直線」會誤判：站得筆直也符合這個條件！
+  // 加一個「身體是否呈水平」的判斷——棒式應該是身體橫躺，肩到髖的連線接近水平，而不是接近垂直（站姿）
+  const dx = hip.x - shoulder.x, dy = hip.y - shoulder.y;
+  const angleFromHorizontal = Math.abs(Math.atan2(dy, dx) * 180/Math.PI); // 0度=水平，90度=垂直站立
+  const normalizedAngle = angleFromHorizontal>90 ? 180-angleFromHorizontal : angleFromHorizontal;
+  const isHorizontal = normalizedAngle < 40; // 容許鏡頭角度略微傾斜，但站直的人這個值會接近90度，不會通過
+
+  const isStraight = isStraightLine && isHorizontal;
   mc.formOk = isStraight;
   if(isStraight){
     if(!mc.running){ mc.running = true; mc.startedAt = Date.now() - (mc.value*1000); }
