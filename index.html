@@ -3327,7 +3327,6 @@ async function coachConfirmSubmission(id){
   ev.bossHp = Math.max(0, ev.bossHp - dmg);
   ev.log = ev.log || [];
   ev.log.unshift({date:todayStr(), name:sub.name, dmgToBoss:dmg, dmgTaken:0, source:(sub.type==='pushup'?'伏地挺身 x':'棒式 x')+value+'（動作偵測）'});
-  ev.log = ev.log.slice(0,50);
   ev.pendingSubmissions = ev.pendingSubmissions.filter(s=>s.id!==id);
   delete state.submissionEditDraft[id];
   await saveConfig(state.config);
@@ -3416,7 +3415,6 @@ async function coachApplyEventDamage(name){
   }
   ev.log = ev.log || [];
   ev.log.unshift({date:todayStr(), name, dmgToBoss, dmgTaken});
-  ev.log = ev.log.slice(0,50);
   await saveConfig(state.config);
   if(dmgTaken>0){
     const pl = await getPlayer(name);
