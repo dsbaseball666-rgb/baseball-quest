@@ -1059,8 +1059,19 @@ async function getConfig(){
     if(parsed.bossAttackDamage==null) parsed.bossAttackDamage = 10;
     if(parsed.bossBaseHp==null) parsed.bossBaseHp = 500;
     if(parsed.bossHpIncrement==null) parsed.bossHpIncrement = 300;
-    if(!parsed.spinPrizes) parsed.spinPrizes = buildDefaultConfig().spinPrizes;
-    if(!parsed.event) parsed.event = buildDefaultConfig().event;
+    if(!parsed.spinPrizes || !parsed.spinPrizes.length){
+      const spinData = await getSpinWheelData();
+      parsed.spinPrizes = (spinData && spinData.length) ? spinData : buildDefaultConfig().spinPrizes;
+    } else {
+      // 舊資料還內嵌在 config 裡：搬到獨立文件，之後 config 就會瘦身
+      await saveSpinWheelData(parsed.spinPrizes);
+    }
+    if(!parsed.event || !Object.keys(parsed.event).length){
+      const eventData = await getEventData();
+      parsed.event = eventData || buildDefaultConfig().event;
+    } else {
+      await saveEventData(parsed.event);
+    }
     if(!parsed.event.participants) parsed.event.participants = [];
     if(!parsed.event.log) parsed.event.log = [];
     if(parsed.event.bossImage===undefined) parsed.event.bossImage = null;
@@ -1069,9 +1080,16 @@ async function getConfig(){
     if(!parsed.event.pendingSubmissions) parsed.event.pendingSubmissions = [];
     if(!parsed.event.rewards) parsed.event.rewards = [];
     parsed.event.rewards.forEach(r=>{ if(r.spinTickets==null) r.spinTickets = 0; });
-    if(!parsed.dailyLoginReward) parsed.dailyLoginReward = buildDefaultConfig().dailyLoginReward;
+    if(!parsed.dailyLoginReward && !parsed.loginStreakRewards){
+      const loginData = await getLoginRewardsData();
+      parsed.dailyLoginReward = (loginData && loginData.dailyLoginReward) || buildDefaultConfig().dailyLoginReward;
+      parsed.loginStreakRewards = (loginData && loginData.loginStreakRewards) || buildDefaultConfig().loginStreakRewards;
+    } else {
+      if(!parsed.dailyLoginReward) parsed.dailyLoginReward = buildDefaultConfig().dailyLoginReward;
+      if(!parsed.loginStreakRewards) parsed.loginStreakRewards = buildDefaultConfig().loginStreakRewards;
+      await saveLoginRewardsData({ dailyLoginReward: parsed.dailyLoginReward, loginStreakRewards: parsed.loginStreakRewards });
+    }
     if(parsed.dailyLoginReward.spinTickets==null) parsed.dailyLoginReward.spinTickets = 0;
-    if(!parsed.loginStreakRewards) parsed.loginStreakRewards = buildDefaultConfig().loginStreakRewards;
     parsed.loginStreakRewards.forEach(m=>{ if(m.spinTickets==null) m.spinTickets = 0; });
     (parsed.items||[]).forEach(it=>{
       if(it.subOptions==null) it.subOptions = [];
@@ -1212,13 +1230,54 @@ async function getBossRosterData(){
 async function saveBossRosterData(roster){
   await dbSet('bossRosterData', JSON.stringify(roster));
 }
+async function getEventData(){
+  try{
+    const value = await dbGet('eventData');
+    return JSON.parse(value);
+  }catch(e){
+    return null;
+  }
+}
+async function saveEventData(ev){
+  await dbSet('eventData', JSON.stringify(ev));
+}
+async function getSpinWheelData(){
+  try{
+    const value = await dbGet('spinWheelData');
+    return JSON.parse(value);
+  }catch(e){
+    return null;
+  }
+}
+async function saveSpinWheelData(prizes){
+  await dbSet('spinWheelData', JSON.stringify(prizes));
+}
+async function getLoginRewardsData(){
+  try{
+    const value = await dbGet('loginRewardsData');
+    return JSON.parse(value);
+  }catch(e){
+    return null;
+  }
+}
+async function saveLoginRewardsData(data){
+  await dbSet('loginRewardsData', JSON.stringify(data));
+}
 async function saveConfig(cfg){
-  // 怪物圖鑑（含插畫圖片）資料量很大，獨立存放避免跟其他設定擠爆 Firestore 單一文件 1MB 的容量上限。
-  // 之前兩者共用一個文件，一旦逼近上限寫入會直接失敗，畫面卻顯示「已套用成功」，造成資料看似消失的假象。
-  if(cfg.bossRoster && cfg.bossRoster.length){
-    await saveBossRosterData(cfg.bossRoster);
+  // 怪物圖鑑、團隊活動、抽獎轉盤、登入獎勵——這幾個功能會持續成長（活動紀錄、獎品、里程碑越加越多），
+  // 獨立存放各自的文件，避免跟其他設定擠爆 Firestore 單一文件 1MB 的容量上限。
+  // 之前全部共用一個文件，一旦逼近上限寫入會直接失敗，畫面卻顯示「已套用成功」，造成資料看似消失的假象。
+  const splitKeys = [];
+  if(cfg.bossRoster && cfg.bossRoster.length){ await saveBossRosterData(cfg.bossRoster); splitKeys.push('bossRoster'); }
+  if(cfg.event){ await saveEventData(cfg.event); splitKeys.push('event'); }
+  if(cfg.spinPrizes){ await saveSpinWheelData(cfg.spinPrizes); splitKeys.push('spinPrizes'); }
+  if(cfg.dailyLoginReward || cfg.loginStreakRewards){
+    await saveLoginRewardsData({ dailyLoginReward: cfg.dailyLoginReward, loginStreakRewards: cfg.loginStreakRewards });
+    splitKeys.push('dailyLoginReward', 'loginStreakRewards');
+  }
+  if(splitKeys.length){
     const rest = {};
-    for(const k in cfg){ if(k!=='bossRoster') rest[k] = cfg[k]; }
+    for(const k in cfg){ if(!splitKeys.includes(k)) rest[k] = cfg[k]; }
     await dbSet('config', JSON.stringify(rest));
   } else {
     await dbSet('config', JSON.stringify(cfg));
