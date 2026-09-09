@@ -3124,7 +3124,8 @@ async function coachRandomizeTeams(){
   ev.teamTotals = { A:0, B:0 };
   await saveConfig(state.config);
   showToast('已重新隨機分組！A隊 '+ev.teams.A.length+'人，B隊 '+ev.teams.B.length+'人');
-  render();
+  eventParticipantsCache = [];
+  await refreshEventParticipants();
 }
 async function coachMovePlayerToTeam(name, team){
   const ev = state.config.event;
@@ -5730,10 +5731,13 @@ function renderPlayerRole(){
         </div>` : '';
       if(ev.active){
         const modeTag = ev.mode==='versus' ? '🪢 對抗賽' : '⚔️ 團隊打Boss';
+        const liveStatus = ev.mode==='versus'
+          ? `🅰️ ${(ev.teamTotals&&ev.teamTotals.A)||0} 下 vs ${(ev.teamTotals&&ev.teamTotals.B)||0} 下 🅱️`
+          : `Boss HP ${Math.max(0,Math.round((ev.bossHp||0)/(ev.bossMaxHp||1)*100))}%`;
         return `<div class="panel" style="background:rgba(42,157,143,0.15);border-color:var(--accent-green);padding:10px 16px;">
           <div style="display:flex;align-items:center;gap:10px;">
-            <div style="font-size:22px;">🎪</div>
-            <div style="font-size:13px;"><b style="color:var(--accent-green);">🟢 活動進行中：</b>「${esc(ev.name)}」・ ${modeTag}${(ev.mode!=='versus'&&ev.bossName)?('・ Boss：'+esc(ev.bossName)):''}</div>
+            <div style="font-size:22px;">${ev.mode==='versus'?'🪢':'🎪'}</div>
+            <div style="font-size:13px;flex:1;"><b style="color:var(--accent-green);">🟢 活動進行中：</b>「${esc(ev.name)}」・ ${modeTag}${(ev.mode!=='versus'&&ev.bossName)?('・ Boss：'+esc(ev.bossName)):''}<div class="small-note" style="margin-top:2px;">目前戰況：${esc(liveStatus)}</div></div>
           </div>
           ${rewardsPreview}
         </div>`;
@@ -5966,10 +5970,17 @@ function renderPlayerRole(){
     const isParticipant = ev && (ev.participants||[]).includes(p.name);
     if(!isParticipant) return '';
     if(ev.active){
+      const statusLine = ev.mode==='versus' ? (()=>{
+        const pos = ropePositionFor(ev);
+        const myTeam = (ev.teams&&ev.teams.A||[]).includes(p.name) ? 'A' : ((ev.teams&&ev.teams.B||[]).includes(p.name) ? 'B' : null);
+        const totalA = (ev.teamTotals&&ev.teamTotals.A)||0, totalB = (ev.teamTotals&&ev.teamTotals.B)||0;
+        const leading = totalA===totalB ? '平手中' : (totalA>totalB ? 'A隊領先' : 'B隊領先');
+        return `🅰️ ${totalA} 下 vs ${totalB} 下 🅱️ ・ ${leading}${myTeam?('（你是 '+myTeam+'隊）'):''}`;
+      })() : `Boss HP ${Math.max(0,Math.round((ev.bossHp||0)/(ev.bossMaxHp||1)*100))}%`;
       return `<div class="panel" style="background:rgba(42,157,143,0.15);border-color:var(--accent-green);margin-top:10px;cursor:pointer;" onclick="state.showEventLobby=true;render();">
         <div style="display:flex;align-items:center;gap:10px;">
-          <div style="font-size:24px;">🎪</div>
-          <div style="flex:1;"><div style="font-weight:600;">活動「${esc(ev.name)}」進行中！</div><div class="small-note">點我進入活動大廳</div></div>
+          <div style="font-size:24px;">${ev.mode==='versus'?'🪢':'🎪'}</div>
+          <div style="flex:1;"><div style="font-weight:600;">活動「${esc(ev.name)}」進行中！</div><div class="small-note">${esc(statusLine)}</div></div>
           <div style="font-size:16px;color:var(--accent-green);">進入 →</div>
         </div>
       </div>`;
@@ -6895,7 +6906,9 @@ function renderCoachRole(){
     const startLocal = ev.startTime ? new Date(ev.startTime).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '尚未設定';
     if(eventParticipantsCache.length===0 && (ev.participants||[]).length>0){ refreshEventParticipants(); }
     const hpByName = {};
-    eventParticipantsCache.forEach(pl=>{ hpByName[pl.name] = pl.hp!=null ? pl.hp : playerMaxHp(); });
+    const realNameByName = {};
+    eventParticipantsCache.forEach(pl=>{ hpByName[pl.name] = pl.hp!=null ? pl.hp : playerMaxHp(); realNameByName[pl.name] = pl.realName||''; });
+    function displayNameFor(n){ return realNameByName[n] ? (realNameByName[n]+'（'+n+'）') : n; }
     const rewardOptionsHtml = (ev.rewards||[]).map(r=>`<option value="${r.id}">🎁 ${esc(r.name)}</option>`).join('');
     const participantRows = (ev.participants||[]).map(name=>{
       const dd = state.eventDamageDraft[name] || {};
@@ -6977,20 +6990,20 @@ function renderCoachRole(){
         </div>`;
       })()}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
-        <div>
-          <div class="small-note" style="margin-bottom:4px;">🅰️ A隊名單</div>
-          ${(ev.teams&&ev.teams.A||[]).map(n=>`<div class="item-row" style="cursor:default;padding:4px 8px;"><span>${esc(n)}</span><button class="btn secondary small" style="margin-left:auto;padding:2px 8px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','B')">→B隊</button></div>`).join('') || '<div class="small-note">尚無成員</div>'}
+        <div style="border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg-deep);">
+          <div style="font-weight:700;margin-bottom:6px;color:var(--accent-light);">🅰️ A隊名單（${(ev.teams&&ev.teams.A||[]).length}人）</div>
+          ${(ev.teams&&ev.teams.A||[]).map(n=>`<div class="item-row" style="cursor:default;padding:4px 8px;"><span>${esc(displayNameFor(n))}</span><button class="btn secondary small" style="margin-left:auto;padding:2px 8px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','B')">→B隊</button></div>`).join('') || '<div class="small-note">尚無成員，請先加入參加者並按上面「🎲 隨機分組」</div>'}
         </div>
-        <div>
-          <div class="small-note" style="margin-bottom:4px;">🅱️ B隊名單</div>
-          ${(ev.teams&&ev.teams.B||[]).map(n=>`<div class="item-row" style="cursor:default;padding:4px 8px;"><span>${esc(n)}</span><button class="btn secondary small" style="margin-left:auto;padding:2px 8px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','A')">→A隊</button></div>`).join('') || '<div class="small-note">尚無成員</div>'}
+        <div style="border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg-deep);">
+          <div style="font-weight:700;margin-bottom:6px;color:var(--accent-light);">🅱️ B隊名單（${(ev.teams&&ev.teams.B||[]).length}人）</div>
+          ${(ev.teams&&ev.teams.B||[]).map(n=>`<div class="item-row" style="cursor:default;padding:4px 8px;"><span>${esc(displayNameFor(n))}</span><button class="btn secondary small" style="margin-left:auto;padding:2px 8px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','A')">→A隊</button></div>`).join('') || '<div class="small-note">尚無成員，請先加入參加者並按上面「🎲 隨機分組」</div>'}
         </div>
       </div>
       ${(()=>{
         const teamed = new Set([...(ev.teams&&ev.teams.A||[]), ...(ev.teams&&ev.teams.B||[])]);
         const unassigned = (ev.participants||[]).filter(n=>!teamed.has(n));
         if(!unassigned.length) return '';
-        return `<div class="small-note" style="margin-top:10px;">尚未分組：${unassigned.map(n=>`${esc(n)} <button class="btn secondary small" style="padding:1px 6px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','A')">→A</button><button class="btn secondary small" style="padding:1px 6px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','B')">→B</button>`).join('、 ')}</div>`;
+        return `<div class="small-note" style="margin-top:10px;">尚未分組：${unassigned.map(n=>`${esc(displayNameFor(n))} <button class="btn secondary small" style="padding:1px 6px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','A')">→A</button><button class="btn secondary small" style="padding:1px 6px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','B')">→B</button>`).join('、 ')}</div>`;
       })()}
     </div>
     ` : `
