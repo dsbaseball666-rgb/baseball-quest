@@ -484,7 +484,7 @@ function buildDefaultConfig(){
       bossName:'', bossEmoji:'🔥', bossHp:0, bossMaxHp:0,
       participants:[], log:[],
       pushupDamagePerRep:3, squatDamagePerRep:3,
-      teams:{A:[], B:[]}, teamTotals:{A:0, B:0},
+      teams:{A:[], B:[]}, teamTotals:{A:0, B:0}, targetScore:null,
       pendingSubmissions:[],
       rewards:[]
     },
@@ -1083,6 +1083,7 @@ async function getConfig(){
     if(parsed.event.endTime===undefined) parsed.event.endTime = null;
     if(!parsed.event.teams) parsed.event.teams = {A:[], B:[]};
     if(!parsed.event.teamTotals) parsed.event.teamTotals = {A:0, B:0};
+    if(parsed.event.targetScore===undefined) parsed.event.targetScore = null;
     if(!parsed.event.pendingSubmissions) parsed.event.pendingSubmissions = [];
     if(!parsed.event.rewards) parsed.event.rewards = [];
     parsed.event.rewards.forEach(r=>{ if(r.spinTickets==null) r.spinTickets = 0; });
@@ -1954,6 +1955,7 @@ let state = {
   journalEntryReplyDraft: {},
   addEventRewardDraft: {name:'', pointsValue:0, spinTickets:0, desc:''},
   eventBossHpDraft: {},
+  targetScoreDraft: '',
   currentBossHpDraft: {},
   dailyTasksSelectedDate: null
 };
@@ -3056,6 +3058,18 @@ async function coachSetEventBossHp(){
   showToast('活動 Boss 血量已更新為 '+ev.bossHp+'/'+ev.bossMaxHp);
   render();
 }
+async function coachSetTargetScore(){
+  const ev = state.config.event;
+  const raw = state.targetScoreDraft;
+  if(raw===undefined || raw===''){ showToast('請輸入目標分數，或輸入0代表取消目標分數'); return; }
+  const val = Number(raw);
+  if(isNaN(val) || val<0){ showToast('請輸入正確的數字'); return; }
+  ev.targetScore = val>0 ? Math.round(val) : null;
+  await saveConfig(state.config);
+  state.targetScoreDraft = '';
+  showToast(ev.targetScore ? ('已設定獲勝目標：累積 '+ev.targetScore+' 下先達成的隊伍獲勝') : '已取消目標分數，改用拉繩位置／時間判定勝負');
+  render();
+}
 async function coachSaveEventSetup(){
   const d = state.eventSetupDraft;
   if(!d.name.trim()){ showToast('請輸入活動名稱'); return; }
@@ -3076,6 +3090,7 @@ async function coachSaveEventSetup(){
     bossImage: d.bossImage!==undefined ? d.bossImage : prev.bossImage,
     bossHp: mode==='boss' ? maxHp : prev.bossHp,
     bossMaxHp: mode==='boss' ? maxHp : prev.bossMaxHp,
+    targetScore: d.targetScore!==undefined ? (d.targetScore===''? null : Number(d.targetScore)) : (prev.targetScore||null),
     participants: prev.participants||[],
     log: prev.log||[]
   };
@@ -3145,7 +3160,20 @@ function ropePositionFor(ev){
   return Math.round((totalB/total)*100);
 }
 function versusResult(ev){
-  // 回傳: {status:'ongoing'|'a_win'|'b_win'|'tie', reason:'edge'|'time'|null}
+  // 回傳: {status:'ongoing'|'a_win'|'b_win'|'tie', reason:'edge'|'time'|'target'|null}
+  const totalA = (ev.teamTotals && ev.teamTotals.A) || 0;
+  const totalB = (ev.teamTotals && ev.teamTotals.B) || 0;
+  if(ev.targetScore && ev.targetScore>0){
+    // 達到教練設定的目標分數就立即獲勝，比繩子拉到邊緣更早判定
+    if(totalA>=ev.targetScore && totalB>=ev.targetScore){
+      // 兩隊同時達標，分數高的贏；一樣高算平手
+      if(totalA>totalB) return {status:'a_win', reason:'target'};
+      if(totalB>totalA) return {status:'b_win', reason:'target'};
+      return {status:'tie', reason:'target'};
+    }
+    if(totalA>=ev.targetScore) return {status:'a_win', reason:'target'};
+    if(totalB>=ev.targetScore) return {status:'b_win', reason:'target'};
+  }
   const pos = ropePositionFor(ev);
   if(pos<=5) return {status:'a_win', reason:'edge'};
   if(pos>=95) return {status:'b_win', reason:'edge'};
@@ -5142,9 +5170,11 @@ function renderEventLobbyModal(){
         ${(()=>{
           const pos = ropePositionFor(ev);
           const result = versusResult(ev);
+          const reasonText = result.reason==='target' ? '（達成目標 '+ev.targetScore+' 下）' : result.reason==='edge' ? '（繩子被拉到底）' : '（時間到）';
           const resultBanner = result.status==='ongoing' ? '' :
-            result.status==='tie' ? '<div class="small-note" style="margin-top:8px;text-align:center;color:var(--accent-light);">⏱️ 時間到，目前是平手</div>' :
-            `<div style="margin-top:8px;text-align:center;font-weight:700;color:var(--accent-green);">🎉 ${result.status==='a_win'?'A':'B'}隊獲勝！</div>`;
+            result.status==='tie' ? '<div class="small-note" style="margin-top:8px;text-align:center;color:var(--accent-light);">⏱️ 目前是平手</div>' :
+            `<div style="margin-top:8px;text-align:center;font-weight:700;color:var(--accent-green);">🎉 ${result.status==='a_win'?'A':'B'}隊獲勝！${reasonText}</div>`;
+          const targetProgress = ev.targetScore ? `<div class="small-note" style="margin-top:6px;text-align:center;">🎯 目標 ${ev.targetScore} 下：A隊 ${(ev.teamTotals&&ev.teamTotals.A)||0} ・ B隊 ${(ev.teamTotals&&ev.teamTotals.B)||0}</div>` : '';
           return `
           <div class="flex-between" style="font-size:14px;"><span>🅰️ A隊</span><span>${(ev.teamTotals&&ev.teamTotals.A)||0} 下</span></div>
           <div style="position:relative;height:26px;background:var(--bg-deep);border-radius:13px;margin:8px 0;box-shadow:0 0 0 2px #000 inset;overflow:hidden;">
@@ -5152,6 +5182,7 @@ function renderEventLobbyModal(){
             <div style="position:absolute;top:2px;bottom:2px;width:22px;height:22px;border-radius:50%;background:var(--accent-light);box-shadow:0 0 0 2px #000;transition:left 0.4s;left:calc(${pos}% - 11px);"></div>
           </div>
           <div class="flex-between" style="font-size:14px;"><span>${(ev.teamTotals&&ev.teamTotals.B)||0} 下</span><span>🅱️ B隊</span></div>
+          ${targetProgress}
           ${resultBanner}
           ${ev.endTime ? `<div class="small-note" style="margin-top:8px;text-align:center;">⏰ 結束時間：${esc(new Date(ev.endTime).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}</div>` : ''}
           `;
@@ -6972,12 +7003,24 @@ function renderCoachRole(){
     ${ev.mode==='versus' ? `
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <div class="flex-between"><h2 style="font-size:16px;margin:0;">🪢 拔河對抗賽</h2><button class="btn gold small" onclick="coachRandomizeTeams()">🎲 隨機分組</button></div>
+      <div class="row-flex" style="margin-top:10px;">
+        <div>
+          <label>獲勝目標分數（選填）</label>
+          <input type="number" placeholder="${ev.targetScore?ev.targetScore:'留空＝不啟用，改用拉繩/時間判定'}" value="${state.targetScoreDraft}" oninput="state.targetScoreDraft=this.value">
+        </div>
+        <div style="flex:0;"><button class="btn secondary" onclick="coachSetTargetScore()">套用</button></div>
+      </div>
+      <div class="small-note" style="margin-top:4px;">設定後，哪隊累積下數先達到這個目標就立即獲勝，比拉繩到底或時間到判定更早生效。留空或輸入0代表不啟用，只用拉繩位置／結束時間判定勝負。${ev.targetScore?('目前設定：累積 '+ev.targetScore+' 下獲勝'):'目前未設定目標分數'}</div>
       ${(()=>{
         const pos = ropePositionFor(ev);
         const result = versusResult(ev);
+        const reasonText = result.reason==='target' ? '（達成目標分數 '+ev.targetScore+' 下）' : result.reason==='edge' ? '（繩子被拉到底）' : '（時間到，繩子偏向這一邊）';
         const resultBanner = result.status==='ongoing' ? '' :
-          result.status==='tie' ? '<div class="small-note" style="margin-top:8px;color:var(--accent-light);">⏱️ 時間到，目前是平手</div>' :
-          `<div class="small-note" style="margin-top:8px;color:var(--accent-green);">🎉 ${result.status==='a_win'?'A':'B'}隊獲勝！${result.reason==='edge'?'（繩子被拉到底）':'（時間到，繩子偏向這一邊）'}</div>`;
+          result.status==='tie' ? '<div class="small-note" style="margin-top:8px;color:var(--accent-light);">⏱️ 目前是平手</div>' :
+          `<div class="small-note" style="margin-top:8px;color:var(--accent-green);">🎉 ${result.status==='a_win'?'A':'B'}隊獲勝！${reasonText}</div>`;
+        const targetProgress = ev.targetScore ? `
+          <div class="small-note" style="margin-top:6px;">🎯 目標進度：A隊 ${(ev.teamTotals&&ev.teamTotals.A)||0}/${ev.targetScore} ・ B隊 ${(ev.teamTotals&&ev.teamTotals.B)||0}/${ev.targetScore}</div>
+        ` : '';
         return `
         <div style="margin-top:10px;">
           <div class="flex-between" style="font-size:13px;"><span>🅰️ A隊 ${(ev.teams&&ev.teams.A||[]).length}人</span><span>${(ev.teamTotals&&ev.teamTotals.A)||0} 下</span></div>
@@ -6986,6 +7029,7 @@ function renderCoachRole(){
             <div style="position:absolute;top:2px;bottom:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--accent-light);box-shadow:0 0 0 2px #000;transition:left 0.4s;left:calc(${pos}% - 9px);"></div>
           </div>
           <div class="flex-between" style="font-size:13px;"><span>${((ev.teamTotals&&ev.teamTotals.B)||0)} 下</span><span>🅱️ B隊 ${(ev.teams&&ev.teams.B||[]).length}人</span></div>
+          ${targetProgress}
           ${resultBanner}
         </div>`;
       })()}
