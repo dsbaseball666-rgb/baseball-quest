@@ -479,10 +479,12 @@ function buildDefaultConfig(){
       {id:'ls_30', days:30, points:200, energy:5, spinTickets:2, name:'連續登入一個月'}
     ],
     event: {
-      active:false, name:'', startTime:null,
+      active:false, name:'', startTime:null, endTime:null,
+      mode:'boss', // 'boss'=團隊打Boss, 'versus'=兩隊拔河對抗賽
       bossName:'', bossEmoji:'🔥', bossHp:0, bossMaxHp:0,
       participants:[], log:[],
-      pushupDamagePerRep:3, plankDamagePerSec:1,
+      pushupDamagePerRep:3, squatDamagePerRep:3,
+      teams:{A:[], B:[]}, teamTotals:{A:0, B:0},
       pendingSubmissions:[],
       rewards:[]
     },
@@ -1076,7 +1078,11 @@ async function getConfig(){
     if(!parsed.event.log) parsed.event.log = [];
     if(parsed.event.bossImage===undefined) parsed.event.bossImage = null;
     if(parsed.event.pushupDamagePerRep==null) parsed.event.pushupDamagePerRep = 3;
-    if(parsed.event.plankDamagePerSec==null) parsed.event.plankDamagePerSec = 1;
+    if(parsed.event.squatDamagePerRep==null) parsed.event.squatDamagePerRep = 3;
+    if(!parsed.event.mode) parsed.event.mode = 'boss';
+    if(parsed.event.endTime===undefined) parsed.event.endTime = null;
+    if(!parsed.event.teams) parsed.event.teams = {A:[], B:[]};
+    if(!parsed.event.teamTotals) parsed.event.teamTotals = {A:0, B:0};
     if(!parsed.event.pendingSubmissions) parsed.event.pendingSubmissions = [];
     if(!parsed.event.rewards) parsed.event.rewards = [];
     parsed.event.rewards.forEach(r=>{ if(r.spinTickets==null) r.spinTickets = 0; });
@@ -1907,7 +1913,7 @@ let state = {
   addSpinPrizeDraft: {name:'', weight:10, pointsValue:0},
   spinTicketDraft: {},
   suppressRender: false,
-  eventSetupDraft: {name:'', startTime:'', bossName:'', bossEmoji:'🔥', bossHp:100},
+  eventSetupDraft: {name:'', startTime:'', bossName:'', bossEmoji:'🔥', bossHp:100, mode:'', endTime:undefined},
   eventDamageDraft: {},
   showEventLobby: false,
   showLoginReward: null,
@@ -3054,19 +3060,24 @@ async function coachSaveEventSetup(){
   const d = state.eventSetupDraft;
   if(!d.name.trim()){ showToast('請輸入活動名稱'); return; }
   if(!d.startTime){ showToast('請設定活動開始時間'); return; }
-  if(!d.bossName.trim()){ showToast('請輸入活動 Boss 名稱'); return; }
+  const prev = state.config.event;
+  const mode = d.mode || prev.mode || 'boss';
+  if(mode==='boss' && !(d.bossName||'').trim()){ showToast('請輸入活動 Boss 名稱'); return; }
   const maxHp = Number(d.bossHp)||100;
   state.config.event = {
-    active: state.config.event.active||false,
+    ...prev, // 保留原本已設定的獎勵、換算倍率、參加名單、隊伍等欄位，避免重新儲存設定時被整個蓋掉
+    active: prev.active||false,
     name: d.name.trim(),
     startTime: d.startTime,
-    bossName: d.bossName.trim(),
+    endTime: d.endTime!==undefined ? (d.endTime||null) : (prev.endTime||null),
+    mode: mode,
+    bossName: (d.bossName||'').trim(),
     bossEmoji: d.bossEmoji||'🔥',
-    bossImage: d.bossImage||null,
-    bossHp: maxHp,
-    bossMaxHp: maxHp,
-    participants: state.config.event.participants||[],
-    log: state.config.event.log||[]
+    bossImage: d.bossImage!==undefined ? d.bossImage : prev.bossImage,
+    bossHp: mode==='boss' ? maxHp : prev.bossHp,
+    bossMaxHp: mode==='boss' ? maxHp : prev.bossMaxHp,
+    participants: prev.participants||[],
+    log: prev.log||[]
   };
   await saveConfig(state.config);
   showToast('活動設定已儲存！記得到下面加入參加的選手，並在時間到時按「開始活動」');
@@ -3099,6 +3110,51 @@ async function coachClearEventParticipants(){
   showToast('已清空參加名單');
   render();
 }
+async function coachRandomizeTeams(){
+  const ev = state.config.event;
+  const names = (ev.participants||[]).slice();
+  if(names.length<2){ showToast('至少需要2位參加者才能分組'); return; }
+  // Fisher-Yates 洗牌
+  for(let i=names.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [names[i],names[j]] = [names[j],names[i]];
+  }
+  const half = Math.ceil(names.length/2);
+  ev.teams = { A: names.slice(0,half), B: names.slice(half) };
+  ev.teamTotals = { A:0, B:0 };
+  await saveConfig(state.config);
+  showToast('已重新隨機分組！A隊 '+ev.teams.A.length+'人，B隊 '+ev.teams.B.length+'人');
+  render();
+}
+async function coachMovePlayerToTeam(name, team){
+  const ev = state.config.event;
+  if(!ev.teams) ev.teams = {A:[], B:[]};
+  ev.teams.A = (ev.teams.A||[]).filter(n=>n!==name);
+  ev.teams.B = (ev.teams.B||[]).filter(n=>n!==name);
+  if(team) ev.teams[team].push(name);
+  await saveConfig(state.config);
+  render();
+}
+function ropePositionFor(ev){
+  // 0 = A隊拉到底獲勝端；100 = B隊拉到底獲勝端；50 = 平手中線
+  const totalA = (ev.teamTotals && ev.teamTotals.A) || 0;
+  const totalB = (ev.teamTotals && ev.teamTotals.B) || 0;
+  const total = totalA + totalB;
+  if(total<=0) return 50;
+  return Math.round((totalB/total)*100);
+}
+function versusResult(ev){
+  // 回傳: {status:'ongoing'|'a_win'|'b_win'|'tie', reason:'edge'|'time'|null}
+  const pos = ropePositionFor(ev);
+  if(pos<=5) return {status:'a_win', reason:'edge'};
+  if(pos>=95) return {status:'b_win', reason:'edge'};
+  if(ev.endTime && Date.now() > new Date(ev.endTime).getTime()){
+    if(pos<50) return {status:'a_win', reason:'time'};
+    if(pos>50) return {status:'b_win', reason:'time'};
+    return {status:'tie', reason:'time'};
+  }
+  return {status:'ongoing', reason:null};
+}
 async function coachToggleEventParticipant(name){
   const ev = state.config.event;
   const idx = ev.participants.indexOf(name);
@@ -3111,9 +3167,16 @@ async function coachStartEvent(){
   const ev = state.config.event;
   if(!ev.name){ showToast('請先設定活動內容'); return; }
   if(!ev.participants.length){ showToast('請至少加入一位參加的選手'); return; }
+  if(ev.mode==='versus'){
+    if(!(ev.teams && ev.teams.A && ev.teams.A.length) || !(ev.teams && ev.teams.B && ev.teams.B.length)){
+      showToast('對抗賽模式需要先分組（兩隊都要有人），請按「🎲 隨機分組」');
+      return;
+    }
+  }
   if(ev.active){ showToast('活動已經在進行中了，紀錄都還在，不會被清空'); return; }
   ev.active = true;
-  ev.bossHp = ev.bossMaxHp;
+  if(ev.mode==='versus'){ ev.teamTotals = {A:0, B:0}; }
+  else { ev.bossHp = ev.bossMaxHp; }
   await saveConfig(state.config);
   showToast('🎪 活動已開始！參加的選手打開 App 就會看到活動大廳');
   render();
@@ -3286,6 +3349,51 @@ function processPlankFrame(keypoints, mc){
     if(mc.running) mc.running = false;
   }
 }
+function kneeAngle(kp, side){
+  // side: 'left' 或 'right'。回傳該側膝蓋的彎曲角度（髖-膝-踝），180度=完全站直，角度越小蹲得越深
+  const hip = kp[side+'_hip'], knee = kp[side+'_knee'], ankle = kp[side+'_ankle'];
+  if(!hip || !knee || !ankle || hip.score<0.3 || knee.score<0.3 || ankle.score<0.3) return null;
+  return poseAngle(hip, knee, ankle);
+}
+function processSquatFrame(keypoints, mc){
+  const kp = keypointMap(keypoints);
+  const lh=kp.left_hip, rh=kp.right_hip;
+  if(!lh||!rh || lh.score<0.3||rh.score<0.3) return;
+
+  const leftKnee = kneeAngle(kp,'left');
+  const rightKnee = kneeAngle(kp,'right');
+  const kneeAngleVal = (leftKnee!=null && rightKnee!=null) ? (leftKnee+rightKnee)/2
+    : (leftKnee!=null ? leftKnee : rightKnee);
+  if(kneeAngleVal==null) return;
+
+  const SQUAT_DOWN = 120;  // 膝蓋角度小於這個值，視為真的蹲下去了
+  const SQUAT_UP = 160;    // 膝蓋角度大於這個值，視為站直了
+
+  // 額外驗證：蹲下時髖部應該明顯往下移動（相對肩膀的距離縮短），避免只彎小腿卻沒有真的蹲下的怪姿勢
+  const ls=kp.left_shoulder, rs=kp.right_shoulder;
+  let torsoCheckOk = true;
+  if(ls && rs && ls.score>0.3 && rs.score>0.3){
+    const shoulderY = (ls.y+rs.y)/2, hipY = (lh.y+rh.y)/2;
+    if(!mc.squatBaseline) mc.squatBaseline = Math.abs(hipY-shoulderY) || 1;
+    const torsoLen = Math.abs(hipY-shoulderY);
+    // 蹲下時上半身通常會前傾或整體下降，這裡只做寬鬆檢查：軀幹長度不該離譜地暴增（代表可能偵測跑掉）
+    torsoCheckOk = torsoLen < mc.squatBaseline*1.6;
+  }
+
+  mc.formOk = (kneeAngleVal<SQUAT_DOWN || kneeAngleVal>SQUAT_UP) && torsoCheckOk;
+  if(!mc.poseState) mc.poseState = {phase:'up'};
+  const ps = mc.poseState;
+  if(ps.phase==='up'){
+    if(kneeAngleVal < SQUAT_DOWN && torsoCheckOk) ps.phase = 'down';
+  } else if(ps.phase==='down'){
+    if(kneeAngleVal > SQUAT_UP){
+      ps.phase = 'up';
+      mc.value += 1;
+      const el = document.getElementById('motion-counter-value');
+      if(el) el.textContent = mc.value;
+    }
+  }
+}
 async function startPoseDetectionLoop(){
   const mc = state.showMotionCapture;
   if(!mc) return;
@@ -3322,7 +3430,7 @@ async function startPoseDetectionLoop(){
           if(badge) badge.textContent = mc.personDetected ? '✅ 偵測到你了' : '👀 找不到人，請對準鏡頭';
           if(mc.personDetected){
             if(mc.type==='pushup') processPushupFrame(kps, mc);
-            else processPlankFrame(kps, mc);
+            else if(mc.type==='squat') processSquatFrame(kps, mc);
           }
         }
       }
@@ -3402,8 +3510,29 @@ async function submitMotionResult(){
     id:'ms_'+Date.now(), name: state.currentPlayer, type: mc.type, value: mc.value, timestamp: Date.now()
   });
   await saveConfig(state.config);
-  showToast('✔ 已送出給教練確認！本次完成 '+mc.value+(mc.type==='plank'?' 秒棒式':' 下伏地挺身')+'，等教練確認後才會正式生效');
+  showToast('✔ 已送出給教練確認！本次完成 '+mc.value+(mc.type==='squat'?' 下深蹲':' 下伏地挺身')+'，等教練確認後才會正式生效');
   closeMotionCapture();
+}
+function applyEventContribution(ev, name, amount, sourceLabel){
+  // 依活動模式決定貢獻要算在哪裡：boss模式扣Boss血量；versus模式累加到所屬隊伍的拉力總和
+  ev.log = ev.log || [];
+  if(ev.mode==='versus'){
+    const inA = (ev.teams && ev.teams.A || []).includes(name);
+    const inB = (ev.teams && ev.teams.B || []).includes(name);
+    const team = inA ? 'A' : (inB ? 'B' : null);
+    if(!team){
+      ev.log.unshift({date:todayStr(), name, dmgToBoss:0, dmgTaken:0, source:(sourceLabel||'')+'（尚未分隊，未計分）'});
+      return false;
+    }
+    if(!ev.teamTotals) ev.teamTotals = {A:0, B:0};
+    ev.teamTotals[team] = (ev.teamTotals[team]||0) + amount;
+    ev.log.unshift({date:todayStr(), name, team, value:amount, dmgToBoss:0, dmgTaken:0, source:sourceLabel||''});
+    return true;
+  } else {
+    ev.bossHp = Math.max(0, (ev.bossHp||0) - amount);
+    ev.log.unshift({date:todayStr(), name, dmgToBoss:amount, dmgTaken:0, source:sourceLabel||''});
+    return true;
+  }
 }
 async function coachConfirmSubmission(id){
   const ev = state.config.event;
@@ -3411,15 +3540,14 @@ async function coachConfirmSubmission(id){
   if(!sub) return;
   const draft = state.submissionEditDraft[id];
   const value = (draft!=null && draft!=='') ? Number(draft) : sub.value;
-  const rate = sub.type==='pushup' ? (ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3) : (ev.plankDamagePerSec!=null?ev.plankDamagePerSec:1);
-  const dmg = Math.round(value*rate);
-  ev.bossHp = Math.max(0, ev.bossHp - dmg);
-  ev.log = ev.log || [];
-  ev.log.unshift({date:todayStr(), name:sub.name, dmgToBoss:dmg, dmgTaken:0, source:(sub.type==='pushup'?'伏地挺身 x':'棒式 x')+value+'（動作偵測）'});
+  const rate = sub.type==='pushup' ? (ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3) : (ev.squatDamagePerRep!=null?ev.squatDamagePerRep:3);
+  const amount = Math.round(value*rate);
+  const typeLabel = sub.type==='pushup' ? '伏地挺身' : '深蹲';
+  applyEventContribution(ev, sub.name, amount, typeLabel+' x'+value+'（動作偵測）');
   ev.pendingSubmissions = ev.pendingSubmissions.filter(s=>s.id!==id);
   delete state.submissionEditDraft[id];
   await saveConfig(state.config);
-  showToast('已確認套用「'+sub.name+'」的動作偵測結果，Boss -'+dmg);
+  showToast('已確認套用「'+sub.name+'」的動作偵測結果'+(ev.mode==='versus'?'':('，Boss -'+amount)));
   render();
 }
 async function coachRejectSubmission(id){
@@ -3497,13 +3625,15 @@ async function coachApplyEventDamage(name){
   const d = state.eventDamageDraft[name] || {};
   const dmgToBoss = Number(d.toBoss)||0;
   const dmgTaken = Number(d.taken)||0;
-  if(dmgToBoss<=0 && dmgTaken<=0){ showToast('請至少輸入一項傷害數值'); return; }
+  if(dmgToBoss<=0 && dmgTaken<=0){ showToast('請至少輸入一項數值'); return; }
   const ev = state.config.event;
-  if(dmgToBoss>0){
-    ev.bossHp = Math.max(0, ev.bossHp - dmgToBoss);
-  }
   ev.log = ev.log || [];
-  ev.log.unshift({date:todayStr(), name, dmgToBoss, dmgTaken});
+  if(dmgToBoss>0){
+    applyEventContribution(ev, name, dmgToBoss, '教練手動輸入');
+  }
+  if(dmgTaken>0){
+    ev.log.unshift({date:todayStr(), name, dmgToBoss:0, dmgTaken});
+  }
   await saveConfig(state.config);
   if(dmgTaken>0){
     const pl = await getPlayer(name);
@@ -3513,7 +3643,7 @@ async function coachApplyEventDamage(name){
     }
   }
   state.eventDamageDraft[name] = {};
-  showToast('已套用「'+name+'」的傷害紀錄');
+  showToast('已套用「'+name+'」的紀錄');
   eventParticipantsCache = [];
   await refreshEventParticipants();
 }
@@ -4943,13 +5073,14 @@ function renderLeaderboardModal(){
 function renderMotionCaptureModal(){
   const mc = state.showMotionCapture;
   if(!mc) return '';
-  const isPushup = mc.type==='pushup';
+  const typeLabel = mc.type==='squat' ? '深蹲' : '伏地挺身';
+  const hintText = mc.type==='squat' ? '膝蓋彎曲蹲下再站直算一下' : '手肘彎曲下降再回到起始位置算一下';
   return `
   <div class="modal-bg" onclick="if(event.target===this){closeMotionCapture();}">
     <div class="modal" style="max-width:420px;text-align:center;">
-      <div class="flex-between"><h3 style="margin:0;">📷 ${isPushup?'伏地挺身':'棒式'}偵測</h3><button class="btn secondary small" onclick="closeMotionCapture()">✕ 關閉</button></div>
+      <div class="flex-between"><h3 style="margin:0;">📷 ${typeLabel}偵測</h3><button class="btn secondary small" onclick="closeMotionCapture()">✕ 關閉</button></div>
       ${mc.aiActive ? `
-        <div class="small-note" style="margin:6px 0 10px;color:var(--accent-green);">🤖 AI 自動偵測中，${isPushup?'手肘彎曲下降再回到起始位置算一下':'保持肩－髖－腳踝呈一直線就會持續計時'}。手機請立好，讓鏡頭能拍到你的全身或至少上半身＋髖部。</div>
+        <div class="small-note" style="margin:6px 0 10px;color:var(--accent-green);">🤖 AI 自動偵測中，${hintText}。手機請立好，讓鏡頭能拍到你的全身或至少上半身＋髖部。</div>
       ` : mc.modelLoading ? `
         <div class="small-note" style="margin:6px 0 10px;color:var(--accent-light);">🤖 AI 模型下載中，第一次使用會需要幾秒鐘，請稍候…</div>
       ` : mc.aiError ? `
@@ -4967,16 +5098,16 @@ function renderMotionCaptureModal(){
         </div>
       ` : `<div class="small-note">📷 正在請求相機權限…</div>`}
       <div style="margin:16px 0;">
-        <div class="small-note">${isPushup?'目前次數（AI自動計數）':'目前秒數（AI自動計時）'}</div>
+        <div class="small-note">目前次數（AI自動計數）</div>
         <div id="motion-counter-value" style="font-family:var(--font-display);font-size:44px;color:var(--accent-light);">${mc.value}</div>
-        ${(!isPushup && mc.aiActive) ? `<div class="small-note" style="color:${mc.formOk===false?'var(--accent-red)':'var(--accent-green)'};">${mc.formOk===false?'⚠️ 姿勢跑掉了，喬正後會繼續計時':(mc.formOk?'✔ 姿勢正確，計時中':'')}</div>` : ''}
+        ${mc.aiActive ? `<div class="small-note" style="color:${mc.formOk===false?'var(--accent-red)':'var(--accent-green)'};">${mc.formOk===false?'⚠️ 姿勢不太標準，喬正後繼續':(mc.formOk?'✔ 偵測到動作中':'')}</div>` : ''}
       </div>
       ${(mc.aiError || mc.cameraError) ? `
       <div style="margin-top:10px;padding-top:12px;border-top:1px dashed var(--line);">
-        <div class="small-note" style="margin-bottom:6px;color:var(--accent-red);">相機或 AI 目前無法使用，這次請直接輸入實際完成的結果（${isPushup?'次數':'秒數'}），教練確認時也會再次核對：</div>
-        <input type="number" placeholder="${isPushup?'例如：15':'例如：45'}" value="${mc.value||''}" oninput="motionSetManualValue(this.value)">
+        <div class="small-note" style="margin-bottom:6px;color:var(--accent-red);">相機或 AI 目前無法使用，這次請直接輸入實際完成的次數，教練確認時也會再次核對：</div>
+        <input type="number" placeholder="例如：15" value="${mc.value||''}" oninput="motionSetManualValue(this.value)">
       </div>` : `
-      <div class="small-note" style="margin-top:10px;color:var(--text-dim);">次數／秒數由 AI 自動偵測計算，無法手動修改，確保公平喔！有問題可以找教練協助確認。</div>
+      <div class="small-note" style="margin-top:10px;color:var(--text-dim);">次數由 AI 自動偵測計算，無法手動修改，確保公平喔！有問題可以找教練協助確認。</div>
       `}
       </div>
       <button class="btn gold" style="width:100%;margin-top:14px;padding:12px;font-size:15px;" onclick="submitMotionResult()">✅ 完成！送出給教練確認</button>
@@ -4999,10 +5130,33 @@ function renderEventLobbyModal(){
       <div style="width:100%;margin-top:4px;"><div class="hp-bar-outer" style="height:8px;"><div class="hp-bar-inner" style="width:${hpPct}%;background:${hpPct<=25?'linear-gradient(90deg,#8a1f1f,#D93A3A)':'linear-gradient(90deg,#3A8A4A,#4CAF50)'};"></div></div></div>
     </div>`;
   }).join('') || '<div class="empty">尚無參加者資料</div>';
+  const myTeam = ev.mode==='versus' ? ((ev.teams&&ev.teams.A||[]).includes(p.name)?'A':((ev.teams&&ev.teams.B||[]).includes(p.name)?'B':null)) : null;
   return `
   <div class="modal-bg" onclick="if(event.target===this){state.showEventLobby=false;render();}">
     <div class="modal" style="max-width:420px;max-height:85vh;overflow-y:auto;">
       <div class="flex-between"><h3 style="margin:0;">🎪 ${esc(ev.name||'團隊活動')}</h3><button class="btn secondary small" onclick="state.showEventLobby=false;render();">✕ 關閉</button></div>
+      ${ev.mode==='versus' ? `
+      <div class="small-note" style="margin:8px 0 12px;">跟隊友一起拔河對抗賽！你做的每一下伏地挺身／深蹲，都會幫你的隊伍把繩子拉過來。${myTeam?('你是 <b style="color:var(--accent-light);">'+(myTeam==='A'?'🅰️ A隊':'🅱️ B隊')+'</b> 的一員！'):'你目前還沒有被分到隊伍，請找教練確認。'}</div>
+      <div class="panel" style="background:var(--bg-panel-2);">
+        ${(()=>{
+          const pos = ropePositionFor(ev);
+          const result = versusResult(ev);
+          const resultBanner = result.status==='ongoing' ? '' :
+            result.status==='tie' ? '<div class="small-note" style="margin-top:8px;text-align:center;color:var(--accent-light);">⏱️ 時間到，目前是平手</div>' :
+            `<div style="margin-top:8px;text-align:center;font-weight:700;color:var(--accent-green);">🎉 ${result.status==='a_win'?'A':'B'}隊獲勝！</div>`;
+          return `
+          <div class="flex-between" style="font-size:14px;"><span>🅰️ A隊</span><span>${(ev.teamTotals&&ev.teamTotals.A)||0} 下</span></div>
+          <div style="position:relative;height:26px;background:var(--bg-deep);border-radius:13px;margin:8px 0;box-shadow:0 0 0 2px #000 inset;overflow:hidden;">
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.4);"></div>
+            <div style="position:absolute;top:2px;bottom:2px;width:22px;height:22px;border-radius:50%;background:var(--accent-light);box-shadow:0 0 0 2px #000;transition:left 0.4s;left:calc(${pos}% - 11px);"></div>
+          </div>
+          <div class="flex-between" style="font-size:14px;"><span>${(ev.teamTotals&&ev.teamTotals.B)||0} 下</span><span>🅱️ B隊</span></div>
+          ${resultBanner}
+          ${ev.endTime ? `<div class="small-note" style="margin-top:8px;text-align:center;">⏰ 結束時間：${esc(new Date(ev.endTime).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}</div>` : ''}
+          `;
+        })()}
+      </div>
+      ` : `
       <div class="small-note" style="margin:8px 0 12px;">全隊一起挑戰活動 Boss！教練會依大家的表現，現場輸入造成的傷害跟受到的傷害，密切留意血條變化。</div>
       <div class="panel" style="background:var(--bg-panel-2);text-align:center;">
         ${ev.bossImage ? `<img src="${ev.bossImage}" style="width:72px;height:72px;image-rendering:pixelated;border-radius:10px;filter:drop-shadow(0 0 16px rgba(228,87,46,0.6));">` : `<div style="font-size:44px;">${esc(ev.bossEmoji||'🔥')}</div>`}
@@ -5010,6 +5164,7 @@ function renderEventLobbyModal(){
         <div class="hp-bar-outer" style="max-width:280px;"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
         <div class="small-note">HP ${ev.bossHp||0} / ${ev.bossMaxHp||0}</div>
       </div>
+      `}
       ${(ev.rewards||[]).length ? `
       <div class="panel" style="background:var(--bg-panel-2);margin-top:10px;">
         <div class="small-note" style="margin-bottom:6px;text-align:left;">🎁 這次活動的獎品：</div>
@@ -5019,12 +5174,12 @@ function renderEventLobbyModal(){
       </div>` : ''}
       ${(()=>{
         const rankTotals = {};
-        (ev.participants||[]).forEach(name=>{ rankTotals[name] = {name, dmgToBoss:0}; });
+        (ev.participants||[]).forEach(name=>{ rankTotals[name] = {name, amount:0}; });
         (ev.log||[]).forEach(l=>{
-          if(!rankTotals[l.name]) rankTotals[l.name] = {name:l.name, dmgToBoss:0};
-          rankTotals[l.name].dmgToBoss += (l.dmgToBoss||0);
+          if(!rankTotals[l.name]) rankTotals[l.name] = {name:l.name, amount:0};
+          rankTotals[l.name].amount += (ev.mode==='versus' ? (l.value||0) : (l.dmgToBoss||0));
         });
-        const ranking = Object.values(rankTotals).sort((a,b)=>b.dmgToBoss-a.dmgToBoss).filter(r=>r.dmgToBoss>0);
+        const ranking = Object.values(rankTotals).sort((a,b)=>b.amount-a.amount).filter(r=>r.amount>0);
         if(!ranking.length) return '';
         return `<h3 style="font-size:14px;margin-top:14px;">🏆 目前排名</h3>
         <div class="panel" style="background:var(--bg-panel-2);padding:10px;">
@@ -5034,22 +5189,24 @@ function renderEventLobbyModal(){
             return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;${isMe?'color:var(--accent-light);':''}">
               <span style="font-family:var(--font-display);font-size:14px;width:22px;flex-shrink:0;">${medal}</span>
               <span style="flex:1;font-size:13px;">${esc(r.name)}${isMe?' (你)':''}</span>
-              <span class="small-note">⚔️ ${r.dmgToBoss}</span>
+              <span class="small-note">${ev.mode==='versus'?'💪':'⚔️'} ${r.amount}</span>
             </div>`;
           }).join('')}
         </div>`;
       })()}
+      ${ev.mode!=='versus' ? `
       <h3 style="font-size:14px;margin-top:14px;">👥 參加隊員血量</h3>
       ${rows}
+      ` : ''}
       ${(ev.participants||[]).includes(p.name) ? `
       <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);">
-        <div class="small-note" style="margin-bottom:8px;text-align:center;">輪到你上場了嗎？完成動作、對 Boss 造成傷害！</div>
+        <div class="small-note" style="margin-bottom:8px;text-align:center;">${ev.mode==='versus'?'幫你的隊伍拉繩子！完成動作為隊伍累積拉力！':'輪到你上場了嗎？完成動作、對 Boss 造成傷害！'}</div>
         <div style="display:flex;gap:8px;">
           <button class="btn gold" style="flex:1;" onclick="openMotionCapture('pushup')">👊 伏地挺身</button>
-          <button class="btn gold" style="flex:1;" onclick="openMotionCapture('plank')">🧘 棒式</button>
+          <button class="btn gold" style="flex:1;" onclick="openMotionCapture('squat')">🏋️ 深蹲</button>
         </div>
       </div>` : ''}
-      <div class="small-note" style="margin-top:10px;text-align:center;">💪 認真做好每一次動作，幫全隊一起打倒 Boss！</div>
+      <div class="small-note" style="margin-top:10px;text-align:center;">💪 ${ev.mode==='versus'?'認真做好每一次動作，幫隊伍贏得拔河對抗賽！':'認真做好每一次動作，幫全隊一起打倒 Boss！'}</div>
     </div>
   </div>`;
 }
@@ -5572,20 +5729,22 @@ function renderPlayerRole(){
           </div>
         </div>` : '';
       if(ev.active){
+        const modeTag = ev.mode==='versus' ? '🪢 對抗賽' : '⚔️ 團隊打Boss';
         return `<div class="panel" style="background:rgba(42,157,143,0.15);border-color:var(--accent-green);padding:10px 16px;">
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="font-size:22px;">🎪</div>
-            <div style="font-size:13px;"><b style="color:var(--accent-green);">🟢 活動進行中：</b>「${esc(ev.name)}」${ev.bossName?('・ Boss：'+esc(ev.bossName)):''}</div>
+            <div style="font-size:13px;"><b style="color:var(--accent-green);">🟢 活動進行中：</b>「${esc(ev.name)}」・ ${modeTag}${(ev.mode!=='versus'&&ev.bossName)?('・ Boss：'+esc(ev.bossName)):''}</div>
           </div>
           ${rewardsPreview}
         </div>`;
       }
       const isPast = new Date(ev.startTime).getTime() < Date.now();
       if(isPast) return '';
+      const modeTag2 = ev.mode==='versus' ? '🪢 對抗賽' : '⚔️ 團隊打Boss';
       return `<div class="panel" style="background:rgba(255,209,102,0.12);border-color:var(--accent-light);padding:10px 16px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <div style="font-size:22px;">📅</div>
-          <div style="font-size:13px;">即將登場：「${esc(ev.name)}」・ ${esc(startLocal)}</div>
+          <div style="font-size:13px;">即將登場：「${esc(ev.name)}」・ ${modeTag2} ・ ${esc(startLocal)}</div>
         </div>
         ${rewardsPreview}
       </div>`;
@@ -6762,10 +6921,21 @@ function renderCoachRole(){
     body = `
     <div class="panel" style="background:${ev.active?'rgba(42,157,143,0.12)':'var(--bg-panel-2)'};border-color:${ev.active?'var(--accent-green)':'var(--line)'};margin-bottom:14px;">
       <div class="flex-between"><h2 style="font-size:16px;margin:0;">${ev.active?'🟢 活動進行中':'⚙️ 活動設定'}</h2><button class="btn secondary small" onclick="coachRefreshEventData()">🔄 重新整理（拉取學生剛送出的結果）</button></div>
-      <div class="row-flex">
+      <div class="row-flex" style="margin-top:10px;">
+        <div>
+          <label>活動模式</label>
+          <select onchange="state.eventSetupDraft.mode=this.value; render();">
+            <option value="boss" ${(state.eventSetupDraft.mode||ev.mode||'boss')==='boss'?'selected':''}>⚔️ 團隊打Boss</option>
+            <option value="versus" ${(state.eventSetupDraft.mode||ev.mode)==='versus'?'selected':''}>🪢 對抗賽（拔河）</option>
+          </select>
+        </div>
+      </div>
+      <div class="row-flex" style="margin-top:10px;">
         <div><label>活動名稱</label><input type="text" value="${esc(state.eventSetupDraft.name||ev.name||'')}" oninput="state.eventSetupDraft.name=this.value" placeholder="例如：暑期團練 Boss 挑戰賽"></div>
         <div><label>開始時間</label><input type="datetime-local" value="${esc(state.eventSetupDraft.startTime||(ev.startTime?ev.startTime.slice(0,16):''))}" oninput="state.eventSetupDraft.startTime=this.value"></div>
+        <div><label>結束時間（選填）</label><input type="datetime-local" value="${state.eventSetupDraft.endTime!==undefined?esc(state.eventSetupDraft.endTime):(ev.endTime?esc(ev.endTime.slice(0,16)):'')}" onchange="state.eventSetupDraft.endTime=this.value"></div>
       </div>
+      ${(state.eventSetupDraft.mode||ev.mode||'boss')==='boss' ? `
       <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;">
         <div style="width:64px;height:64px;flex-shrink:0;border-radius:10px;background:var(--bg-deep);display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 0 0 2px #000;">
           ${draftBossImage ? `<img src="${draftBossImage}" style="width:100%;height:100%;object-fit:cover;image-rendering:pixelated;">` : `<span style="font-size:32px;">${esc(state.eventSetupDraft.bossEmoji||ev.bossEmoji||'🔥')}</span>`}
@@ -6775,14 +6945,55 @@ function renderCoachRole(){
         <div style="flex:0;"><button class="btn gold" onclick="coachRandomizeEventBoss()">🎲 自動生成怪物</button></div>
       </div>
       <div class="small-note" style="margin-top:6px;">按「自動生成怪物」會從你的怪物圖鑑（40隻正式插畫）隨機挑一隻威風的來當這次活動的 Boss，名稱跟圖片會自動帶入，記得再按下面「儲存活動設定」套用。</div>
+      ` : `
+      <div class="small-note" style="margin-top:10px;color:var(--accent-light);">🪢 對抗賽模式：參加的選手會被分成 A、B 兩隊拔河對抗，哪隊做的動作（伏地挺身／深蹲）累積量比較多，繩子就會往哪隊拉過去。設定好參加名單後，記得到下面按「🎲 隨機分組」。</div>
+      `}
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn secondary" onclick="coachSaveEventSetup()">💾 儲存活動設定</button>
         ${ev.active ? `<button class="btn secondary" style="color:var(--accent-red);" onclick="coachEndEvent()">🛑 結束活動</button>` : `<button class="btn gold" onclick="coachStartEvent()">▶️ 開始活動</button>`}
         <button class="btn secondary" style="color:var(--accent-red);" onclick="coachClearEventLog()">🗑️ 清空活動紀錄（重新開始排名）</button>
       </div>
       <div class="small-note" style="margin-top:6px;">「開始活動」不會清空既有紀錄，重複點擊或重新整理都不會弄丟資料；只有明確按「清空活動紀錄」才會重置排名。</div>
-      <div class="small-note" style="margin-top:10px;">目前設定：${esc(ev.name||'尚未設定')} ・ 開始時間 ${startLocal} ・ Boss：${esc(ev.bossName||'')}</div>
+      <div class="small-note" style="margin-top:10px;">目前設定：${esc(ev.name||'尚未設定')} ・ 模式：${ev.mode==='versus'?'🪢 對抗賽':'⚔️ 團隊打Boss'} ・ 開始 ${startLocal}${ev.endTime?(' ・ 結束 '+new Date(ev.endTime).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})):''}</div>
     </div>
+    ${ev.mode==='versus' ? `
+    <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
+      <div class="flex-between"><h2 style="font-size:16px;margin:0;">🪢 拔河對抗賽</h2><button class="btn gold small" onclick="coachRandomizeTeams()">🎲 隨機分組</button></div>
+      ${(()=>{
+        const pos = ropePositionFor(ev);
+        const result = versusResult(ev);
+        const resultBanner = result.status==='ongoing' ? '' :
+          result.status==='tie' ? '<div class="small-note" style="margin-top:8px;color:var(--accent-light);">⏱️ 時間到，目前是平手</div>' :
+          `<div class="small-note" style="margin-top:8px;color:var(--accent-green);">🎉 ${result.status==='a_win'?'A':'B'}隊獲勝！${result.reason==='edge'?'（繩子被拉到底）':'（時間到，繩子偏向這一邊）'}</div>`;
+        return `
+        <div style="margin-top:10px;">
+          <div class="flex-between" style="font-size:13px;"><span>🅰️ A隊 ${(ev.teams&&ev.teams.A||[]).length}人</span><span>${(ev.teamTotals&&ev.teamTotals.A)||0} 下</span></div>
+          <div style="position:relative;height:22px;background:var(--bg-deep);border-radius:11px;margin:6px 0;box-shadow:0 0 0 2px #000 inset;overflow:hidden;">
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.4);"></div>
+            <div style="position:absolute;top:2px;bottom:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--accent-light);box-shadow:0 0 0 2px #000;transition:left 0.4s;left:calc(${pos}% - 9px);"></div>
+          </div>
+          <div class="flex-between" style="font-size:13px;"><span>${((ev.teamTotals&&ev.teamTotals.B)||0)} 下</span><span>🅱️ B隊 ${(ev.teams&&ev.teams.B||[]).length}人</span></div>
+          ${resultBanner}
+        </div>`;
+      })()}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+        <div>
+          <div class="small-note" style="margin-bottom:4px;">🅰️ A隊名單</div>
+          ${(ev.teams&&ev.teams.A||[]).map(n=>`<div class="item-row" style="cursor:default;padding:4px 8px;"><span>${esc(n)}</span><button class="btn secondary small" style="margin-left:auto;padding:2px 8px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','B')">→B隊</button></div>`).join('') || '<div class="small-note">尚無成員</div>'}
+        </div>
+        <div>
+          <div class="small-note" style="margin-bottom:4px;">🅱️ B隊名單</div>
+          ${(ev.teams&&ev.teams.B||[]).map(n=>`<div class="item-row" style="cursor:default;padding:4px 8px;"><span>${esc(n)}</span><button class="btn secondary small" style="margin-left:auto;padding:2px 8px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','A')">→A隊</button></div>`).join('') || '<div class="small-note">尚無成員</div>'}
+        </div>
+      </div>
+      ${(()=>{
+        const teamed = new Set([...(ev.teams&&ev.teams.A||[]), ...(ev.teams&&ev.teams.B||[])]);
+        const unassigned = (ev.participants||[]).filter(n=>!teamed.has(n));
+        if(!unassigned.length) return '';
+        return `<div class="small-note" style="margin-top:10px;">尚未分組：${unassigned.map(n=>`${esc(n)} <button class="btn secondary small" style="padding:1px 6px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','A')">→A</button><button class="btn secondary small" style="padding:1px 6px;font-size:10px;" onclick="coachMovePlayerToTeam('${esc(n)}','B')">→B</button>`).join('、 ')}</div>`;
+      })()}
+    </div>
+    ` : `
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;display:flex;align-items:center;gap:8px;">${ev.bossImage?`<img src="${ev.bossImage}" style="width:28px;height:28px;border-radius:6px;image-rendering:pixelated;">`:esc(ev.bossEmoji||'🔥')} Boss 血量：${ev.bossHp||0} / ${ev.bossMaxHp||0}</h2>
       <div class="hp-bar-outer"><div class="hp-bar-inner" style="width:${bossPct}%;"></div></div>
@@ -6794,26 +7005,28 @@ function renderCoachRole(){
       </div>
       <div class="small-note" style="margin-top:6px;">只填其中一項也可以，沒填的維持原本數值；套用不會影響活動的開始/結束狀態，隨時可以調整。</div>
     </div>
+    `}
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
-      <div class="flex-between"><h2 style="font-size:16px;margin:0;">🏆 目前排名（依累積對Boss傷害）</h2><button class="btn secondary small" onclick="coachRefreshEventData()">🔄 重新整理</button></div>
-      <div class="small-note" style="margin:6px 0 8px;">排名依每位選手所有回合累積的「對Boss傷害」排序，方便直接對表現好的選手發放獎勵。</div>
+      <div class="flex-between"><h2 style="font-size:16px;margin:0;">🏆 目前排名</h2><button class="btn secondary small" onclick="coachRefreshEventData()">🔄 重新整理</button></div>
+      <div class="small-note" style="margin:6px 0 8px;">${ev.mode==='versus'?'排名依每位選手累積的動作次數排序（不分隊伍），方便看誰最努力。':'排名依每位選手所有回合累積的「對Boss傷害」排序，方便直接對表現好的選手發放獎勵。'}</div>
       ${(()=>{
         const rankTotals = {};
-        (ev.participants||[]).forEach(name=>{ rankTotals[name] = {name, dmgToBoss:0, entries:0}; });
+        (ev.participants||[]).forEach(name=>{ rankTotals[name] = {name, amount:0, entries:0}; });
         (ev.log||[]).forEach(l=>{
-          if(!rankTotals[l.name]) rankTotals[l.name] = {name:l.name, dmgToBoss:0, entries:0};
-          rankTotals[l.name].dmgToBoss += (l.dmgToBoss||0);
+          if(!rankTotals[l.name]) rankTotals[l.name] = {name:l.name, amount:0, entries:0};
+          rankTotals[l.name].amount += (ev.mode==='versus' ? (l.value||0) : (l.dmgToBoss||0));
           rankTotals[l.name].entries += 1;
         });
-        const ranking = Object.values(rankTotals).sort((a,b)=>b.dmgToBoss-a.dmgToBoss);
-        if(!ranking.length) return '<div class="empty">目前還沒有任何傷害紀錄</div>';
+        const ranking = Object.values(rankTotals).sort((a,b)=>b.amount-a.amount);
+        if(!ranking.length) return '<div class="empty">目前還沒有任何紀錄</div>';
         return ranking.map((r,i)=>{
           const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
           const hp = hpByName[r.name];
+          const teamTag = ev.mode==='versus' ? ((ev.teams&&ev.teams.A||[]).includes(r.name)?' 🅰️':((ev.teams&&ev.teams.B||[]).includes(r.name)?' 🅱️':'')) : '';
           return `<div class="item-row" style="cursor:default;flex-wrap:wrap;">
             <span style="font-family:var(--font-display);font-size:15px;width:26px;flex-shrink:0;">${medal}</span>
-            <span style="min-width:90px;">${esc(r.name)}</span>
-            <span class="xp-tag">⚔️ 累積傷害 ${r.dmgToBoss}</span>
+            <span style="min-width:90px;">${esc(r.name)}${teamTag}</span>
+            <span class="xp-tag">${ev.mode==='versus'?'💪 累積次數 '+r.amount:'⚔️ 累積傷害 '+r.amount}</span>
             <span class="small-note">${r.entries}筆紀錄${hp!=null?(' ・ ❤️'+hp):''}</span>
             ${(ev.rewards||[]).length ? `
             <select style="width:130px;margin-left:auto;" onchange="state.eventDamageDraft['${esc(r.name)}']=Object.assign({},state.eventDamageDraft['${esc(r.name)}'],{rewardId:this.value})">
@@ -6847,10 +7060,10 @@ function renderCoachRole(){
     </div>
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;">📷 動作偵測換算倍率</h2>
-      <div class="small-note" style="margin-bottom:8px;">學生用相機偵測完動作後會送到下面「待確認清單」，套用時就是用這個倍率算出對 Boss 的傷害。</div>
+      <div class="small-note" style="margin-bottom:8px;">學生用相機偵測完動作後會送到下面「待確認清單」，套用時就是用這個倍率算出${ev.mode==='versus'?'給隊伍的拉力值':'對 Boss 的傷害'}。</div>
       <div class="row-flex">
-        <div><label>每 1 下伏地挺身＝多少傷害</label><input type="number" value="${ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3}" onchange="coachUpdateEventRate('pushupDamagePerRep', this.value)"></div>
-        <div><label>每 1 秒棒式＝多少傷害</label><input type="number" value="${ev.plankDamagePerSec!=null?ev.plankDamagePerSec:1}" onchange="coachUpdateEventRate('plankDamagePerSec', this.value)"></div>
+        <div><label>每 1 下伏地挺身＝${ev.mode==='versus'?'多少拉力':'多少傷害'}</label><input type="number" value="${ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3}" onchange="coachUpdateEventRate('pushupDamagePerRep', this.value)"></div>
+        <div><label>每 1 下深蹲＝${ev.mode==='versus'?'多少拉力':'多少傷害'}</label><input type="number" value="${ev.squatDamagePerRep!=null?ev.squatDamagePerRep:3}" onchange="coachUpdateEventRate('squatDamagePerRep', this.value)"></div>
       </div>
     </div>
     ${(ev.pendingSubmissions||[]).length ? `
@@ -6858,15 +7071,15 @@ function renderCoachRole(){
       <div class="flex-between"><h2 style="font-size:16px;margin:0;">📋 待確認的動作偵測結果（${ev.pendingSubmissions.length}）</h2><button class="btn secondary small" onclick="coachClearAllPendingSubmissions()">🗑️ 全部清空</button></div>
       <div class="small-note" style="margin-bottom:8px;">目前是框架測試模式，數值是學生手動模擬的；可以直接確認套用，或先修改數字再套用。${ev.pendingSubmissions.length>50?'<br><b style="color:var(--accent-red);">⚠️ 累積筆數偏多，建議盡快處理或按上面「全部清空」，避免持續累積。</b>':''}</div>
       ${ev.pendingSubmissions.map(sub=>{
-        const rate = sub.type==='pushup' ? (ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3) : (ev.plankDamagePerSec!=null?ev.plankDamagePerSec:1);
+        const rate = sub.type==='pushup' ? (ev.pushupDamagePerRep!=null?ev.pushupDamagePerRep:3) : (ev.squatDamagePerRep!=null?ev.squatDamagePerRep:3);
         const editVal = state.submissionEditDraft[sub.id];
         const useVal = (editVal!=null && editVal!=='') ? Number(editVal) : sub.value;
         const dmgPreview = Math.round(useVal*rate);
         return `<div class="item-row" style="cursor:default;flex-wrap:wrap;">
           <span style="min-width:80px;">${esc(sub.name)}</span>
-          <span class="small-note">${sub.type==='pushup'?'👊 伏地挺身':'🧘 棒式'}</span>
+          <span class="small-note">${sub.type==='pushup'?'👊 伏地挺身':'🏋️ 深蹲'}</span>
           <input type="number" style="width:90px;" value="${editVal!=null?editVal:sub.value}" oninput="state.submissionEditDraft['${sub.id}']=this.value">
-          <span class="small-note">→ 預估傷害 ${dmgPreview}</span>
+          <span class="small-note">→ 預估${ev.mode==='versus'?'拉力':'傷害'} ${dmgPreview}</span>
           <button class="btn gold small" onclick="coachConfirmSubmission('${sub.id}')">✅ 確認套用</button>
           <button class="btn secondary small" onclick="coachRejectSubmission('${sub.id}')">❌ 忽略</button>
         </div>`;
