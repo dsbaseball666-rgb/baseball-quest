@@ -3904,7 +3904,7 @@ async function syncFitnessFromSecretary(){
       if(pd) allPlayers[n] = pd;
     }
     const unmatchedNames = new Set();
-    let imported = 0, skipped = 0;
+    let imported = 0, skipped = 0, updated = 0;
     const touched = {};
     for(const rec of records){
       const playerName = String(rec.player||'').trim();
@@ -3912,9 +3912,7 @@ async function syncFitnessFromSecretary(){
       const match = Object.values(allPlayers).find(pd=>pd.realName===playerName || pd.name===playerName);
       if(!match){ unmatchedNames.add(playerName); continue; }
       if(!match.fitnessTests) match.fitnessTests = [];
-      const already = match.fitnessTests.some(t=>t.sourceId && rec.id && t.sourceId===rec.id);
-      if(already){ skipped++; continue; }
-      match.fitnessTests.push({
+      const newData = {
         sourceId: rec.id || null,
         date: rec.date || todayStr(),
         semester: rec.semester || '',
@@ -3924,7 +3922,23 @@ async function syncFitnessFromSecretary(){
         unit: rec.unit || '',
         rating: rec.rating || '',
         note: rec.note || ''
-      });
+      };
+      const existingIdx = match.fitnessTests.findIndex(t=>t.sourceId && rec.id && t.sourceId===rec.id);
+      if(existingIdx>-1){
+        // 這筆紀錄之前同步過，但來源系統的內容可能被修改過（例如成績改分），比對內容不同就覆蓋更新
+        const existing = match.fitnessTests[existingIdx];
+        const changed = JSON.stringify({date:existing.date,semester:existing.semester,item:existing.item,round:existing.round,value:existing.value,unit:existing.unit,rating:existing.rating,note:existing.note})
+          !== JSON.stringify({date:newData.date,semester:newData.semester,item:newData.item,round:newData.round,value:newData.value,unit:newData.unit,rating:newData.rating,note:newData.note});
+        if(changed){
+          match.fitnessTests[existingIdx] = newData;
+          touched[match.name] = match;
+          updated++;
+        } else {
+          skipped++;
+        }
+        continue;
+      }
+      match.fitnessTests.push(newData);
       touched[match.name] = match;
       imported++;
     }
@@ -3935,7 +3949,7 @@ async function syncFitnessFromSecretary(){
     state.secretarySyncStatus = {
       loading:false, error:null, raw:null,
       matched: Object.keys(touched).length, unmatched: Array.from(unmatchedNames),
-      imported, skipped
+      imported, updated, skipped
     };
     render();
   }catch(e){
@@ -6743,11 +6757,11 @@ function renderCoachRole(){
     body = `
     <div class="panel" style="background:var(--bg-panel-2);margin-bottom:14px;">
       <h2 style="font-size:16px;">🔄 從行動祕書系統直接同步</h2>
-      <div class="small-note" style="margin:6px 0 10px;">直接讀取 baseballCoach/fitnessRecords 這份文件，依球員姓名自動比對，已經同步過的紀錄不會重複匯入。</div>
+      <div class="small-note" style="margin:6px 0 10px;">直接讀取 baseballCoach/fitnessRecords 這份文件，依球員姓名自動比對；如果同一筆紀錄的內容在行動祕書系統被修改過（例如改分），同步時會自動覆蓋更新，不會漏掉修正。</div>
       <button class="btn gold" ${sync&&sync.loading?'disabled':''} onclick="syncFitnessFromSecretary()">${sync&&sync.loading?'讀取中…':'🔄 立即同步'}</button>
       ${sync && sync.error ? `<div class="small-note" style="margin-top:10px;color:var(--accent-red);">⚠️ ${esc(sync.error)}</div>` : ''}
       ${sync && !sync.error && !sync.loading && sync.imported!==undefined ? `
-        <div class="small-note" style="margin-top:10px;color:var(--accent-green);">✔ 同步完成！新匯入 ${sync.imported} 筆紀錄（涉及 ${sync.matched} 位球員）${sync.skipped?('，'+sync.skipped+' 筆已存在略過'):''}</div>
+        <div class="small-note" style="margin-top:10px;color:var(--accent-green);">✔ 同步完成！新匯入 ${sync.imported} 筆${sync.updated?('、更新修正 '+sync.updated+' 筆'):''}（涉及 ${sync.matched} 位球員）${sync.skipped?('，'+sync.skipped+' 筆內容沒變化略過'):''}</div>
         ${sync.unmatched && sync.unmatched.length ? `<div class="small-note" style="margin-top:6px;color:var(--accent-red);">⚠️ 以下姓名沒有比對到球員（可能本名沒填一致，或還沒建立角色）：${sync.unmatched.map(esc).join('、')}</div>` : ''}
       ` : ''}
       ${sync && sync.raw ? `<div style="margin-top:10px;"><div class="small-note" style="margin-bottom:4px;">${sync.parsedSample?'讀取到的原始資料內容（給教練確認格式用）：':'原始內容：'}</div><pre style="background:var(--bg-deep);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:11px;overflow-x:auto;max-height:300px;overflow-y:auto;white-space:pre-wrap;">${esc(sync.raw)}</pre></div>` : ''}
