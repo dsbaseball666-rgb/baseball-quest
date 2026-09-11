@@ -2792,6 +2792,37 @@ async function confirmItemUsed(playerName, invId){
   }
   render();
 }
+let purchasesCache = null; // null=尚未載入過；[]=已載入但目前沒有任何購買紀錄，兩者要區分開，不然空清單會被誤判成「還沒載入」而無限重複觸發載入
+async function refreshPurchases(){
+  const names = await listPlayers();
+  const all = [];
+  for(const n of names){
+    const p = normalizePlayer(await getPlayer(n));
+    if(!p) continue;
+    (p.inventory||[]).forEach(inv=>{
+      all.push(Object.assign({playerName: p.name, playerRealName: p.realName||''}, inv));
+    });
+  }
+  all.sort((a,b)=> (b.purchaseDate||'').localeCompare(a.purchaseDate||''));
+  purchasesCache = all;
+  render();
+}
+async function coachRefundItem(playerName, invId){
+  askConfirm('確定要幫「'+playerName+'」退貨這個項目嗎？點數會退還給選手，這筆兌換紀錄會被移除，這個動作無法復原！', async ()=>{
+    const p = await getPlayer(playerName);
+    if(!p){ showToast('找不到這位球員'); return; }
+    const idx = (p.inventory||[]).findIndex(i=>i.id===invId);
+    if(idx===-1){ showToast('找不到這筆紀錄，可能已經被處理過了'); return; }
+    const item = p.inventory[idx];
+    p.inventory.splice(idx,1);
+    p.points = (p.points||0) + (item.cost||0);
+    await savePlayer(p);
+    showToast('已退貨「'+item.itemName+'」，退還 '+(item.cost||0)+' 點給 '+playerName);
+    purchasesCache = [];
+    await refreshPurchases();
+    overviewCache = [];
+  });
+}
 async function coachChangeAvatar(playerName, avatarId){
   const p = await getPlayer(playerName);
   if(!p) return;
@@ -5542,8 +5573,8 @@ function renderPlayerLogModal(){
     if(inv.status==='used') statusText = `<span style="color:var(--accent-green);">✅ 已確認使用（${esc(inv.usedAt)}）</span>`;
     else if(inv.status==='scheduled') statusText = `<span style="color:var(--accent-light);">已排定：${esc(inv.useDate)}</span>`;
     else statusText = `<span style="color:var(--text-dim);">⏳ 未使用</span> <button class="btn secondary small" onclick="confirmItemUsed('${esc(p.name)}','${inv.id}')">確認使用</button>`;
-    return `<tr><td>${esc(inv.itemName)}</td><td>${esc(inv.purchaseDate)}</td><td>-${inv.cost}</td><td>${statusText}</td></tr>`;
-  }).join('') || '<tr><td colspan=4 class="empty">物品欄是空的</td></tr>';
+    return `<tr><td>${esc(inv.itemName)}</td><td>${esc(inv.purchaseDate)}</td><td>-${inv.cost}</td><td>${statusText}</td><td><button class="btn secondary small" style="color:var(--accent-red);" onclick="coachRefundItem('${esc(p.name)}','${inv.id}')">↩️ 退貨</button></td></tr>`;
+  }).join('') || '<tr><td colspan=5 class="empty">物品欄是空的</td></tr>';
   const curChar = effectiveCharacter(p);
   const avatarOptions = CHARACTER_ROSTER.map(c=>`<option value="${c.id}" ${p.avatarId===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
   return `
@@ -5565,7 +5596,7 @@ function renderPlayerLogModal(){
       <table><thead><tr><th>日期</th><th>任務</th><th>點數</th></tr></thead>
       <tbody>${bonusRows}</tbody></table>
       <h3 style="margin-top:18px;font-size:18px;">🎒 物品欄／兌換紀錄</h3>
-      <table><thead><tr><th>商品</th><th>兌換日</th><th>花費</th><th>狀態</th></tr></thead>
+      <table><thead><tr><th>商品</th><th>兌換日</th><th>花費</th><th>狀態</th><th></th></tr></thead>
       <tbody>${invRows}</tbody></table>
       <div style="margin-top:14px;text-align:right;">
         <button class="btn secondary small" onclick="closePlayerLog()">關閉</button>
@@ -6339,9 +6370,24 @@ function renderCoachRole(){
       </div>
     </div>`;
   } else if(state.coachTab==='shop'){
+    if(purchasesCache===null && state.players.length>0){ refreshPurchases(); }
     let rows = (state.config.shopItems||[]).map(s=>`
       <tr><td>${esc(s.name)}${s.advanceNotice?' <span class="small-note">(需提前告知)</span>':''}${s.desc?`<div class="small-note">${esc(s.desc)}</div>`:''}</td><td>${s.cost}</td><td><button class="btn secondary small" onclick="deleteShopItem('${s.id}')">刪除</button></td></tr>
     `).join('');
+    const purchaseRows = (purchasesCache||[]).map(inv=>{
+      let statusText;
+      if(inv.status==='used') statusText = `<span style="color:var(--accent-green);">✅ 已使用</span>`;
+      else if(inv.status==='scheduled') statusText = `<span style="color:var(--accent-light);">已排定：${esc(inv.useDate)}</span>`;
+      else statusText = `<span style="color:var(--text-dim);">⏳ 未使用</span>`;
+      return `<tr>
+        <td>${esc(inv.playerRealName||inv.playerName)}<div class="small-note">${esc(inv.playerName)}</div></td>
+        <td>${esc(inv.itemName)}</td>
+        <td>${esc(inv.purchaseDate)}</td>
+        <td>-${inv.cost}</td>
+        <td>${statusText}</td>
+        <td><button class="btn secondary small" style="color:var(--accent-red);" onclick="coachRefundItem('${esc(inv.playerName)}','${inv.id}')">↩️ 退貨</button></td>
+      </tr>`;
+    }).join('');
     body = `
     <div class="small-note" style="margin-bottom:10px;">學生可以用點數在「福利社」買這裡上架的商品，兌換後會出現在他們的「物品欄」。標記「需提前告知」的商品（例如休假卡），學生兌換時必須先選一個不是今天的日期。</div>
     <table><thead><tr><th>商品名稱</th><th>點數</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan=3 class="empty">尚無商品</td></tr>'}</tbody></table>
@@ -6356,6 +6402,12 @@ function renderCoachRole(){
       </div>
       <label style="display:flex;align-items:center;gap:6px;color:var(--text-chalk);margin-top:10px;"><input type="checkbox" style="width:auto;" ${state.addShopDraft.advanceNotice?'checked':''} onchange="state.addShopDraft.advanceNotice=this.checked">需提前告知日期（不可當日使用，例如休假卡）</label>
       <div style="margin-top:12px;"><button class="btn gold" onclick="addShopItem()">新增商品</button></div>
+    </div>
+    <div class="panel" style="background:var(--bg-panel-2);margin-top:14px;">
+      <div class="flex-between"><h2 style="font-size:16px;margin:0;">🧾 全隊購買紀錄</h2><button class="btn secondary small" onclick="purchasesCache=null;refreshPurchases();">🔄 重新整理</button></div>
+      <div class="small-note" style="margin:6px 0 10px;">依購買日期新到舊排序，可以直接退貨——會把物品從該選手的物品欄移除，並退還點數。</div>
+      <table><thead><tr><th>選手</th><th>商品</th><th>購買日</th><th>花費</th><th>狀態</th><th></th></tr></thead>
+      <tbody>${purchaseRows || '<tr><td colspan=6 class="empty">目前還沒有任何購買紀錄</td></tr>'}</tbody></table>
     </div>`;
   } else if(state.coachTab==='bossroster'){
     if(!state.teamBoss){ getTeamBoss().then(b=>{ state.teamBoss=b; render(); }); }
@@ -7337,7 +7389,7 @@ function setRole(r){
   if(r==='coach'){ overviewCache=[]; stopNpcChat(); }
   render();
 }
-function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } if(t==='examscores'){ examScoresCache=[]; } if(t==='fitness'){ fitnessCache=[]; } if(t==='bonus'){ personalTasksCache=[]; } if(t==='event'){ eventParticipantsCache=[]; } if(t==='dailytasks'){ dailyTasksCache=[]; } render(); }
+function setCoachTab(t){ state.coachTab=t; if(t==='overview'){ overviewCache=[]; } if(t==='journals'){ journalsCache=[]; } if(t==='examscores'){ examScoresCache=[]; } if(t==='fitness'){ fitnessCache=[]; } if(t==='bonus'){ personalTasksCache=[]; } if(t==='event'){ eventParticipantsCache=[]; } if(t==='dailytasks'){ dailyTasksCache=[]; } if(t==='shop'){ purchasesCache=null; } render(); }
 
 function openCoachLogin(){
   state.showCoachLogin = true;
