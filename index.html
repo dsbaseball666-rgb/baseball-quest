@@ -3281,7 +3281,7 @@ async function ensurePoseModel(){
   await tf.setBackend('webgl');
   await tf.ready();
   poseDetectorInstance = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
-    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+    modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER // 用精準版而非輕量版：動作計數不需要極高幀率，優先確保關節點偵測準確度
   });
   return poseDetectorInstance;
 }
@@ -3343,33 +3343,36 @@ function processPushupFrame(keypoints, mc){
   const kp = keypointMap(keypoints);
   const ls=kp.left_shoulder, rs=kp.right_shoulder, lh=kp.left_hip, rh=kp.right_hip;
   if(!ls||!rs||!lh||!rh || ls.score<0.3||rs.score<0.3||lh.score<0.3||rh.score<0.3) return;
-  const shoulderY = (ls.y+rs.y)/2;
-  const hipY = (lh.y+rh.y)/2;
-  const bodyLen = Math.abs(hipY-shoulderY) || 1;
-  if(!mc.poseState) mc.poseState = {phase:'up', refY:shoulderY, baseline:bodyLen};
-  const ps = mc.poseState;
-  const deltaRatio = (shoulderY - ps.refY) / ps.baseline;
-  const DOWN_THRESHOLD = 0.14, UP_THRESHOLD = 0.05;
 
-  // 手肘彎曲角度：雙重驗證，避免只靠身體上下位移就能誤判（例如晃鏡頭、蹲低但手臂沒真的彎）
-  // 左右手肘分數不一定同時可靠（側面拍攝常常一邊會被身體擋住），取信心分數較高、看得到的那一邊
+  // 身體姿勢檢查：伏地挺身身體應該大致呈水平（趴姿），跟棒式用同一套邏輯，
+  // 避免只是站著彎手臂晃一晃就被誤判成一下（這種作弊手法純靠手肘角度是防不住的）
+  const shoulder = {x:(ls.x+rs.x)/2, y:(ls.y+rs.y)/2};
+  const hip = {x:(lh.x+rh.x)/2, y:(lh.y+rh.y)/2};
+  const dx = hip.x-shoulder.x, dy = hip.y-shoulder.y;
+  const angleFromHorizontal = Math.abs(Math.atan2(dy,dx)*180/Math.PI); // 0度=水平，90度=垂直站立
+  const normalizedAngle = angleFromHorizontal>90 ? 180-angleFromHorizontal : angleFromHorizontal;
+  const bodyIsHorizontal = normalizedAngle < 70; // 容忍度放寬：正面拍攝時身體會有透視形變，角度判斷沒有側面拍攝準，這裡優先避免把真的動作判定失敗（教練後續還是會人工確認送出結果，不會完全失去把關）
+
+  // 手肘彎曲角度（肩-肘-腕）：這是判斷上升/下降階段的主要依據。
+  // 用角度而不是「肩膀在畫面上的垂直位置」來判斷的原因：如果手機是立在正前方拍臉（很常見的擺法），
+  // 伏地挺身時身體主要往鏡頭方向前後移動，肩膀在畫面上的Y座標根本不會有明顯變化，位置判斷法會完全失準；
+  // 手肘角度不管正面、側面、斜角拍攝都能穩定反映「手臂有沒有真的彎曲伸直」，準確度更可靠。
   const leftElbow = elbowAngle(kp,'left');
   const rightElbow = elbowAngle(kp,'right');
   const elbowAngleVal = (leftElbow!=null && rightElbow!=null) ? Math.min(leftElbow,rightElbow)
     : (leftElbow!=null ? leftElbow : rightElbow);
-  const ELBOW_BENT = 110;   // 手肘角度小於這個值，視為真的彎曲（伏地挺身下降姿勢）
-  const ELBOW_STRAIGHT = 150; // 手肘角度大於這個值，視為真的伸直（伏地挺身起始姿勢）
-  mc.formOk = elbowAngleVal!=null ? (elbowAngleVal<ELBOW_BENT || elbowAngleVal>ELBOW_STRAIGHT) : null;
+  const ELBOW_BENT = 110;     // 手肘角度小於這個值，視為真的彎曲（下降姿勢）
+  const ELBOW_STRAIGHT = 150; // 手肘角度大於這個值，視為真的伸直（起始姿勢）
 
+  mc.formOk = (bodyIsHorizontal && elbowAngleVal!=null) ? (elbowAngleVal<ELBOW_BENT || elbowAngleVal>ELBOW_STRAIGHT) : false;
+  if(!bodyIsHorizontal || elbowAngleVal==null) return; // 沒有呈趴姿，或看不到手肘，這一幀不計算
+
+  if(!mc.poseState) mc.poseState = {phase:'up'};
+  const ps = mc.poseState;
   if(ps.phase==='up'){
-    ps.refY = ps.refY*0.9 + shoulderY*0.1; // 站姿基準緩慢跟隨微調，容忍鏡頭角度小幅飄移
-    const bodyMovedDown = deltaRatio > DOWN_THRESHOLD;
-    const elbowBent = elbowAngleVal==null ? true : elbowAngleVal < ELBOW_BENT; // 偵測不到手肘時，退回只看身體位移，避免完全卡住
-    if(bodyMovedDown && elbowBent) ps.phase = 'down';
+    if(elbowAngleVal < ELBOW_BENT) ps.phase = 'down';
   } else if(ps.phase==='down'){
-    const bodyMovedUp = deltaRatio < UP_THRESHOLD;
-    const elbowStraight = elbowAngleVal==null ? true : elbowAngleVal > ELBOW_STRAIGHT;
-    if(bodyMovedUp && elbowStraight){
+    if(elbowAngleVal > ELBOW_STRAIGHT){
       ps.phase = 'up';
       mc.value += 1;
       const el = document.getElementById('motion-counter-value');
