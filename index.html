@@ -987,7 +987,13 @@ async function getConfig(){
     const parsed = JSON.parse(value);
     // 補上舊版資料可能缺少的欄位，避免功能因為缺欄位而失效
     if(!parsed.bonusTasks) parsed.bonusTasks = [];
-    if(!parsed.shopItems) parsed.shopItems = [];
+    if(parsed.shopItems !== undefined){
+      // 舊資料還內嵌在 config 裡（不論是有內容、還是教練故意清空過）：直接搬到獨立文件保留原狀
+      await saveShopItemsData(parsed.shopItems);
+    } else {
+      const shopData = await getShopItemsData();
+      parsed.shopItems = (shopData !== null) ? shopData : buildDefaultConfig().shopItems;
+    }
     if(parsed.penaltyPoints==null) parsed.penaltyPoints = 30;
     if(parsed.bossDodgeChance==null) parsed.bossDodgeChance = 0.2;
     if(parsed.attackEnergyCost==null) parsed.attackEnergyCost = 1;
@@ -1271,14 +1277,26 @@ async function getLoginRewardsData(){
 async function saveLoginRewardsData(data){
   await dbSet('loginRewardsData', JSON.stringify(data));
 }
+async function getShopItemsData(){
+  try{
+    const value = await dbGet('shopItemsData');
+    return JSON.parse(value);
+  }catch(e){
+    return null;
+  }
+}
+async function saveShopItemsData(items){
+  await dbSet('shopItemsData', JSON.stringify(items));
+}
 async function saveConfig(cfg){
-  // 怪物圖鑑、團隊活動、抽獎轉盤、登入獎勵——這幾個功能會持續成長（活動紀錄、獎品、里程碑越加越多），
+  // 怪物圖鑑、團隊活動、抽獎轉盤、登入獎勵、商店商品——這幾個功能會持續成長（活動紀錄、獎品、商品越加越多），
   // 獨立存放各自的文件，避免跟其他設定擠爆 Firestore 單一文件 1MB 的容量上限。
   // 之前全部共用一個文件，一旦逼近上限寫入會直接失敗，畫面卻顯示「已套用成功」，造成資料看似消失的假象。
   const splitKeys = [];
   if(cfg.bossRoster!==undefined && cfg.bossRoster!==null){ await saveBossRosterData(cfg.bossRoster); splitKeys.push('bossRoster'); }
   if(cfg.event){ await saveEventData(cfg.event); splitKeys.push('event'); }
   if(cfg.spinPrizes!==undefined && cfg.spinPrizes!==null){ await saveSpinWheelData(cfg.spinPrizes); splitKeys.push('spinPrizes'); }
+  if(cfg.shopItems!==undefined && cfg.shopItems!==null){ await saveShopItemsData(cfg.shopItems); splitKeys.push('shopItems'); }
   if(cfg.dailyLoginReward || cfg.loginStreakRewards){
     await saveLoginRewardsData({ dailyLoginReward: cfg.dailyLoginReward, loginStreakRewards: cfg.loginStreakRewards });
     splitKeys.push('dailyLoginReward', 'loginStreakRewards');
@@ -2744,9 +2762,14 @@ async function addShopItem(){
   render();
 }
 async function deleteShopItem(id){
-  state.config.shopItems = (state.config.shopItems||[]).filter(s=>s.id!==id);
-  await saveConfig(state.config);
-  render();
+  const item = (state.config.shopItems||[]).find(s=>s.id===id);
+  const label = item ? item.name : '這個商品';
+  askConfirm('確定要從商店下架「'+label+'」嗎？這個動作無法復原！', async ()=>{
+    state.config.shopItems = (state.config.shopItems||[]).filter(s=>s.id!==id);
+    await saveConfig(state.config);
+    showToast('已下架「'+label+'」');
+    render();
+  });
 }
 function buyShopItem(itemId){
   const item = (state.config.shopItems||[]).find(s=>s.id===itemId);
