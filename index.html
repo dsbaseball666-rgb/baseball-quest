@@ -3092,7 +3092,26 @@ async function coachGrantSpinTickets(name, isAll){
 }
 /* ---- 團隊活動大廳 ---- */
 async function coachRefreshEventData(){
-  state.config = await getConfig();
+  // 只精準重新抓「活動」這一份獨立資料，不要整個重抓config——
+  // 之前這裡是 state.config = await getConfig()，等於連商店、怪物圖鑑、抽獎轉盤全部一起重抓，
+  // 如果剛好跟別的地方存檔有時間差，就可能把那些其實沒有變動的資料覆蓋回舊的版本，造成「商品跑回舊的」這種假性回朔。
+  const eventData = await getEventData();
+  if(eventData){
+    state.config.event = eventData;
+    if(!state.config.event.participants) state.config.event.participants = [];
+    if(!state.config.event.log) state.config.event.log = [];
+    if(state.config.event.bossImage===undefined) state.config.event.bossImage = null;
+    if(state.config.event.pushupDamagePerRep==null) state.config.event.pushupDamagePerRep = 3;
+    if(state.config.event.squatDamagePerRep==null) state.config.event.squatDamagePerRep = 3;
+    if(!state.config.event.mode) state.config.event.mode = 'boss';
+    if(state.config.event.endTime===undefined) state.config.event.endTime = null;
+    if(!state.config.event.teams) state.config.event.teams = {A:[], B:[]};
+    if(!state.config.event.teamTotals) state.config.event.teamTotals = {A:0, B:0};
+    if(state.config.event.targetScore===undefined) state.config.event.targetScore = null;
+    if(!state.config.event.pendingSubmissions) state.config.event.pendingSubmissions = [];
+    if(!state.config.event.rewards) state.config.event.rewards = [];
+    state.config.event.rewards.forEach(r=>{ if(r.spinTickets==null) r.spinTickets = 0; });
+  }
   eventParticipantsCache = [];
   await refreshEventParticipants();
   showToast('已重新整理活動資料');
