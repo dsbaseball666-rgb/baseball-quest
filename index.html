@@ -992,12 +992,13 @@ async function getConfig(){
     if(parsed.bossDodgeChance==null) parsed.bossDodgeChance = 0.2;
     if(parsed.attackEnergyCost==null) parsed.attackEnergyCost = 1;
     if(parsed.ultimateDamage==null) parsed.ultimateDamage = 100;
-    if(parsed.bossRoster && parsed.bossRoster.length){
-      // 舊資料還內嵌在 config 裡：搬到獨立文件，之後 config 就會瘦身，不會再一起擠爆容量上限
+    if(parsed.bossRoster !== undefined){
+      // 舊資料還內嵌在 config 裡（不論是有內容、還是教練故意清空過）：直接搬到獨立文件保留原狀，
+      // 之後 config 就會瘦身；用 undefined 判斷而不是看陣列長度，避免「清空後被誤判成沒遷移過」而蓋回預設值
       await saveBossRosterData(parsed.bossRoster);
     } else {
       const rosterData = await getBossRosterData();
-      parsed.bossRoster = (rosterData && rosterData.length) ? rosterData : DEFAULT_BOSS_ROSTER.slice();
+      parsed.bossRoster = (rosterData !== null) ? rosterData : DEFAULT_BOSS_ROSTER.slice();
     }
     if(!parsed.skillRoster) parsed.skillRoster = buildDefaultConfig().skillRoster;
     // 技能改成職業專屬：若還留著舊版「全職業共用」的預設技能，換成新的職業專屬技能組合，教練自己額外新增的技能不會被動到
@@ -1061,18 +1062,18 @@ async function getConfig(){
     if(parsed.bossAttackDamage==null) parsed.bossAttackDamage = 10;
     if(parsed.bossBaseHp==null) parsed.bossBaseHp = 500;
     if(parsed.bossHpIncrement==null) parsed.bossHpIncrement = 300;
-    if(!parsed.spinPrizes || !parsed.spinPrizes.length){
-      const spinData = await getSpinWheelData();
-      parsed.spinPrizes = (spinData && spinData.length) ? spinData : buildDefaultConfig().spinPrizes;
-    } else {
-      // 舊資料還內嵌在 config 裡：搬到獨立文件，之後 config 就會瘦身
+    if(parsed.spinPrizes !== undefined){
+      // 舊資料還內嵌在 config 裡（不論是有內容、還是教練故意清空過）：直接搬到獨立文件保留原狀
       await saveSpinWheelData(parsed.spinPrizes);
-    }
-    if(!parsed.event || !Object.keys(parsed.event).length){
-      const eventData = await getEventData();
-      parsed.event = eventData || buildDefaultConfig().event;
     } else {
+      const spinData = await getSpinWheelData();
+      parsed.spinPrizes = (spinData !== null) ? spinData : buildDefaultConfig().spinPrizes;
+    }
+    if(parsed.event !== undefined){
       await saveEventData(parsed.event);
+    } else {
+      const eventData = await getEventData();
+      parsed.event = (eventData !== null) ? eventData : buildDefaultConfig().event;
     }
     if(!parsed.event.participants) parsed.event.participants = [];
     if(!parsed.event.log) parsed.event.log = [];
@@ -1275,9 +1276,9 @@ async function saveConfig(cfg){
   // 獨立存放各自的文件，避免跟其他設定擠爆 Firestore 單一文件 1MB 的容量上限。
   // 之前全部共用一個文件，一旦逼近上限寫入會直接失敗，畫面卻顯示「已套用成功」，造成資料看似消失的假象。
   const splitKeys = [];
-  if(cfg.bossRoster && cfg.bossRoster.length){ await saveBossRosterData(cfg.bossRoster); splitKeys.push('bossRoster'); }
+  if(cfg.bossRoster!==undefined && cfg.bossRoster!==null){ await saveBossRosterData(cfg.bossRoster); splitKeys.push('bossRoster'); }
   if(cfg.event){ await saveEventData(cfg.event); splitKeys.push('event'); }
-  if(cfg.spinPrizes){ await saveSpinWheelData(cfg.spinPrizes); splitKeys.push('spinPrizes'); }
+  if(cfg.spinPrizes!==undefined && cfg.spinPrizes!==null){ await saveSpinWheelData(cfg.spinPrizes); splitKeys.push('spinPrizes'); }
   if(cfg.dailyLoginReward || cfg.loginStreakRewards){
     await saveLoginRewardsData({ dailyLoginReward: cfg.dailyLoginReward, loginStreakRewards: cfg.loginStreakRewards });
     splitKeys.push('dailyLoginReward', 'loginStreakRewards');
